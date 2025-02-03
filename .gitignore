@@ -1,0 +1,63 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode-specific files
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.xcworkspace
+DerivedData/
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+.build/
+
+# CocoaPods (if you're using it)
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Checkouts
+Carthage/Build
+
+# Firebase & Google Services
+GoogleService-Info.plist  # DO NOT COMMIT THIS FILE (contains sensitive API keys)
+Firebase/
+Crashlytics/
+fabric.properties
+
+# Fastlane (if used)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+fastlane/metadata
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+*.lock
+*.bak
+
+# Logs
+*.log
+*.xcactivitylog
+
+# Generated Files
+*.hmap
+*.tmap
+*.swiftsourceinfo
+*.swiftdoc
+
+# Git merge files
+*.orig
