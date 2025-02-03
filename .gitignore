@@ -61,3 +61,4 @@ fastlane/metadata
 
 # Git merge files
 *.orig
+Tiktok/GoogleService-Info.plist
