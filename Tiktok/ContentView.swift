@@ -11,105 +11,83 @@ import FirebaseAuth
 struct ContentView: View {
     @State private var email = ""
     @State private var password = ""
-    @State private var message = ""
+    @State private var isSignUp = false
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
-        VStack(spacing: 20) {
-            TextField("Email", text: $email)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(8)
+        ZStack {
+            Color(.systemBackground).edgesIgnoringSafeArea(.all)
             
-            SecureField("Password", text: $password)
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(8)
-            
-            Button("Sign Up") {
-                print("Attempting to sign up with email: \(email)")
-                AuthService.shared.signUp(email: email, password: password) { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success(let authResult):
-                            message = "Signed up: \(authResult.user.email ?? "")"
-                            print("Successfully signed up user: \(authResult.user.uid)")
-                        case .failure(let error):
-                            message = "Sign up error: \(error.localizedDescription)"
-                            print("Sign up error details:")
-                            print("Error code: \((error as NSError).code)")
-                            print("Error domain: \((error as NSError).domain)")
-                            print("Full error: \(error)")
-                            let authError = error as NSError
-                            switch authError.code {
-                            case AuthErrorCode.emailAlreadyInUse.rawValue:
-                                message = "This email is already registered. Please try signing in instead."
-                            case AuthErrorCode.invalidEmail.rawValue:
-                                message = "Please enter a valid email address."
-                            case AuthErrorCode.weakPassword.rawValue:
-                                message = "Password is too weak. Please use at least 6 characters."
-                            default:
-                                message = "Error: \(error.localizedDescription)"
-                            }
+            VStack(spacing: 25) {
+                // Logo/Title
+                VStack(spacing: 10) {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.blue)
+                    Text("TikTok Clone")
+                        .font(.title)
+                        .fontWeight(.bold)
+                }
+                .padding(.bottom, 40)
+                
+                // Input Fields
+                VStack(spacing: 15) {
+                    TextField("Email", text: $email)
+                        .textFieldStyle(CustomTextFieldStyle())
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
+                    
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(CustomTextFieldStyle())
+                }
+                
+                // Error Message
+                if let errorMessage = authViewModel.error {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                
+                // Sign In/Up Button
+                Button {
+                    Task {
+                        if isSignUp {
+                            await authViewModel.signUp(email: email, password: password, username: email)
+                        } else {
+                            await authViewModel.signIn(email: email, password: password)
                         }
                     }
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(8)
-            
-            Button("Sign In") {
-                print("Attempting to sign in with email: \(email)")
-                AuthService.shared.signIn(email: email, password: password) { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success(let authResult):
-                            message = "Signed in: \(authResult.user.email ?? "")"
-                            print("Successfully signed in user: \(authResult.user.uid)")
-                        case .failure(let error):
-                            message = "Sign in error: \(error.localizedDescription)"
-                            print("Sign in error details:")
-                            print("Error code: \((error as NSError).code)")
-                            print("Error domain: \((error as NSError).domain)")
-                            print("Full error: \(error)")
-                            let authError = error as NSError
-                            switch authError.code {
-                            case AuthErrorCode.wrongPassword.rawValue:
-                                message = "Incorrect password. Please try again."
-                            case AuthErrorCode.userNotFound.rawValue:
-                                message = "No account found with this email. Please sign up first."
-                            case AuthErrorCode.invalidEmail.rawValue:
-                                message = "Please enter a valid email address."
-                            default:
-                                message = "Error: \(error.localizedDescription)"
-                            }
+                } label: {
+                    HStack {
+                        Text(isSignUp ? "Create Account" : "Sign In")
+                            .fontWeight(.semibold)
+                        if authViewModel.isAuthenticated {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(15)
+                }
+                .padding(.horizontal)
+                
+                // Toggle Sign In/Up
+                Button(action: { isSignUp.toggle() }) {
+                    Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
+                        .foregroundColor(.blue)
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.green)
-            .foregroundColor(.white)
-            .cornerRadius(8)
-            
-            Text(message)
-                .padding()
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .onAppear {
-            print("Current Firebase Auth state: \(String(describing: Auth.auth().currentUser))")
+            .padding(.horizontal, 30)
         }
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
+#Preview {
+    ContentView()
+        .environmentObject(AuthViewModel())
 }

@@ -8,15 +8,30 @@
 
 /* Begin PBXBuildFile section */
 		D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = D445E5EF2D51438800695987 /* FirebaseAuth */; };
+		D445E6102D51687300695987 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = D445E60F2D51687300695987 /* FirebaseStorage */; };
+		D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = D445E6112D51689500695987 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		D445E5DB2D51335300695987 /* Tiktok.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tiktok.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D445E60E2D51651400695987 /* Exceptions for "Tiktok" folder in "Tiktok" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D445E5DA2D51335300695987 /* Tiktok */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D445E5DD2D51335300695987 /* Tiktok */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D445E60E2D51651400695987 /* Exceptions for "Tiktok" folder in "Tiktok" target */,
+			);
 			path = Tiktok;
 			sourceTree = "<group>";
 		};
@@ -28,6 +43,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */,
+				D445E6102D51687300695987 /* FirebaseStorage in Frameworks */,
+				D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +88,8 @@
 			name = Tiktok;
 			packageProductDependencies = (
 				D445E5EF2D51438800695987 /* FirebaseAuth */,
+				D445E60F2D51687300695987 /* FirebaseStorage */,
+				D445E6112D51689500695987 /* FirebaseFirestore */,
 			);
 			productName = Tiktok;
 			productReference = D445E5DB2D51335300695987 /* Tiktok.app */;
@@ -263,6 +282,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Tiktok/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tiktok/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -291,6 +311,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Tiktok/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tiktok/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -348,6 +369,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		D445E60F2D51687300695987 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
+		D445E6112D51689500695987 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -6,26 +6,28 @@
 //
 
 import SwiftUI
-import Firebase
+import FirebaseCore
 import FirebaseAuth
 
 @main
-struct TikTokApp: App {
-    // Initialize Firebase in the init
+struct TiktokApp: App {
+    @StateObject private var authViewModel = AuthViewModel()
+    
     init() {
-        print("Configuring Firebase...")
-                FirebaseApp.configure()
-        print("Firebase configured successfully")
-            if let currentUser = Auth.auth().currentUser {
-                print("Current user is already signed in: \(currentUser.uid)")
-            } else {
-                print("No user currently signed in")
-        }
+        FirebaseApp.configure()
     }
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if authViewModel.isAuthenticated && authViewModel.user != nil {
+                    MainTabView()
+                        .environmentObject(authViewModel)
+                } else {
+                    ContentView()
+                        .environmentObject(authViewModel)
+                }
+            }
         }
     }
 }
