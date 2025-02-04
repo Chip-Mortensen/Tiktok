@@ -135,24 +135,33 @@ struct UserProfileView: View {
 // Helper struct for video grid with detail view
 struct UserVideosGridView: View {
     @ObservedObject var viewModel: UserProfileViewModel
-    @State private var selectedVideoIndex: Int?
+    @StateObject private var profileViewModel = ProfileViewModel()
+    @State private var selectedVideo: VideoModel?
     
     var body: some View {
-        VideoGridView(
-            videos: .constant(viewModel.userVideos),
-            onVideoTap: { video in
-                if let index = viewModel.userVideos.firstIndex(where: { $0.id == video.id }) {
-                    selectedVideoIndex = index
+        NavigationStack {
+            VideoGridView(
+                videos: .constant(viewModel.userVideos),
+                onVideoTap: { video in
+                    selectedVideo = video
                 }
+            )
+            .navigationDestination(item: $selectedVideo) { video in
+                VideoDetailView(video: Binding(
+                    get: { video },
+                    set: { newValue in
+                        // Update the video in the userVideos array
+                        if let idx = viewModel.userVideos.firstIndex(where: { $0.id == newValue.id }) {
+                            viewModel.userVideos[idx] = newValue
+                        }
+                        selectedVideo = newValue
+                    }
+                ))
+                .environmentObject(profileViewModel)
             }
-        )
-        .sheet(item: Binding(
-            get: { selectedVideoIndex.map { Index(int: $0) } },
-            set: { selectedVideoIndex = $0?.int }
-        )) { index in
-            if let video = viewModel.userVideos[safe: index.int] {
-                VideoDetailView(video: .constant(video))
-            }
+        }
+        .task {
+            await profileViewModel.fetchUserData()
         }
     }
 }

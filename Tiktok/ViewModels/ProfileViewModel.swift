@@ -158,6 +158,30 @@ final class ProfileViewModel: ObservableObject {
         authService.signOut()
     }
     
+    // Method to update a video (after editing)
+    func updateVideo(_ video: VideoModel) async {
+        do {
+            try await firestoreService.updateVideo(video)
+            videoCache[video.id] = video
+        } catch {
+            print("DEBUG: Error updating video: \(error.localizedDescription)")
+            // Optionally, set an error state here
+            self.error = error
+        }
+    }
+
+    // Method to delete a video
+    func deleteVideo(_ video: VideoModel) async {
+        do {
+            try await firestoreService.deleteVideo(video: video)
+            videoCache.removeValue(forKey: video.id)
+        } catch {
+            print("DEBUG: Error deleting video: \(error.localizedDescription)")
+            // Optionally, set an error state here
+            self.error = error
+        }
+    }
+    
     deinit {
         // Clean up listeners
         listeners.values.forEach { $0.remove() }

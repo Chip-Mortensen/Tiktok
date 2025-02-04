@@ -1,6 +1,6 @@
 import Foundation
 
-struct VideoModel: Identifiable, Codable {
+struct VideoModel: Identifiable, Codable, Hashable {
     let id: String
     let userId: String
     var username: String?
@@ -14,7 +14,7 @@ struct VideoModel: Identifiable, Codable {
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
     
-    struct Comment: Identifiable, Codable {
+    struct Comment: Identifiable, Codable, Hashable {
         let id: String
         let userId: String
         let text: String
@@ -62,5 +62,14 @@ struct VideoModel: Identifiable, Codable {
     mutating func unlike() {
         likes -= 1
         isLiked = false
+    }
+    
+    // Hashable conformance - use only id for equality
+    static func == (lhs: VideoModel, rhs: VideoModel) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 } 

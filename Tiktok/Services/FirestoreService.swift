@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseStorage
 
 enum FirestoreError: Error {
     case documentNotFound
@@ -133,6 +134,44 @@ class FirestoreService {
             "postsCount": FieldValue.increment(Int64(1))
         ])
         print("DEBUG: User's video count updated for user: \(video.userId)")
+    }
+    
+    func updateVideo(_ video: VideoModel) async throws {
+        let videoRef = db.collection("videos").document(video.id)
+        // For now, we update only the caption. You can extend this to add other fields.
+        try await videoRef.updateData([
+            "caption": video.caption
+        ])
+    }
+    
+    // Method to delete a video
+    func deleteVideo(video: VideoModel) async throws {
+        // Delete from Firestore
+        let videoRef = db.collection("videos").document(video.id)
+        try await videoRef.delete()
+
+        // Delete video and thumbnail from Storage
+        let storage = Storage.storage().reference()
+        
+        // Construct storage paths
+        let videoPath = "videos/\(video.userId)/\(video.id).mp4"
+        let thumbnailPath = "thumbnails/\(video.userId)/\(video.id).jpg"
+        
+        // Delete video file
+        let videoStorageRef = storage.child(videoPath)
+        try await videoStorageRef.delete()
+        
+        // Delete thumbnail file if it exists
+        if video.thumbnailUrl != nil {
+            let thumbnailStorageRef = storage.child(thumbnailPath)
+            try await thumbnailStorageRef.delete()
+        }
+
+        // Also decrement the posts count for the user
+        let userRef = db.collection("users").document(video.userId)
+        try await userRef.updateData([
+            "postsCount": FieldValue.increment(Int64(-1))
+        ])
     }
     
     func fetchVideos(limit: Int = 10) async throws -> [VideoModel] {
