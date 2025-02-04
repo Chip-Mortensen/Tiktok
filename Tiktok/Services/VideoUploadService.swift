@@ -27,7 +27,7 @@ actor VideoUploadService {
     
     private init() {}
     
-    func uploadVideo(videoURL: URL, userId: String, caption: String) async throws -> VideoModel {
+    func uploadVideo(videoURL: URL, userId: String, caption: String, progressHandler: @escaping (Double) -> Void) async throws -> VideoModel {
         let videoId = UUID().uuidString
         let videoRef = storage.child("videos/\(userId)/\(videoId).mp4")
         let thumbnailRef = storage.child("thumbnails/\(userId)/\(videoId).jpg")
@@ -53,28 +53,54 @@ actor VideoUploadService {
         let thumbnailMetadata = StorageMetadata()
         thumbnailMetadata.contentType = "image/jpeg"
         
-        // Upload files using putDataAsync
-        do {
-            let _ = try await videoRef.putDataAsync(videoData, metadata: videoMetadata)
-            let _ = try await thumbnailRef.putDataAsync(thumbnailData, metadata: thumbnailMetadata)
+        // Upload files using upload task for progress tracking
+        return try await withCheckedThrowingContinuation { continuation in
+            let uploadTask = videoRef.putData(videoData, metadata: videoMetadata)
             
-            // Get download URLs
-            let finalVideoURL = try await videoRef.downloadURL()
-            let finalThumbnailURL = try await thumbnailRef.downloadURL()
+            // Observe upload progress
+            uploadTask.observe(.progress) { snapshot in
+                if let progress = snapshot.progress {
+                    let fractionCompleted = Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
+                    Task { @MainActor in
+                        progressHandler(fractionCompleted)
+                    }
+                }
+            }
             
-            let video = VideoModel(
-                id: videoId,
-                userId: userId,
-                username: username,
-                videoUrl: finalVideoURL.absoluteString,
-                caption: caption,
-                thumbnailUrl: finalThumbnailURL.absoluteString
-            )
+            // Handle upload completion
+            uploadTask.observe(.success) { _ in
+                Task {
+                    do {
+                        // Upload thumbnail after video upload succeeds
+                        let _ = try await thumbnailRef.putDataAsync(thumbnailData, metadata: thumbnailMetadata)
+                        
+                        // Get download URLs
+                        let finalVideoURL = try await videoRef.downloadURL()
+                        let finalThumbnailURL = try await thumbnailRef.downloadURL()
+                        
+                        let video = VideoModel(
+                            id: videoId,
+                            userId: userId,
+                            username: username,
+                            videoUrl: finalVideoURL.absoluteString,
+                            caption: caption,
+                            thumbnailUrl: finalThumbnailURL.absoluteString
+                        )
+                        
+                        try await self.firestoreService.uploadVideo(video)
+                        continuation.resume(returning: video)
+                    } catch {
+                        continuation.resume(throwing: VideoUploadError.uploadFailed(error.localizedDescription))
+                    }
+                }
+            }
             
-            try await firestoreService.uploadVideo(video)
-            return video
-        } catch {
-            throw VideoUploadError.uploadFailed(error.localizedDescription)
+            // Handle upload failure
+            uploadTask.observe(.failure) { snapshot in
+                if let error = snapshot.error {
+                    continuation.resume(throwing: VideoUploadError.uploadFailed(error.localizedDescription))
+                }
+            }
         }
     }
     

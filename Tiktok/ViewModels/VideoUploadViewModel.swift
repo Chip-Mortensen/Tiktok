@@ -33,6 +33,7 @@ final class VideoUploadViewModel: ObservableObject {
         do {
             isUploading = true
             errorMessage = nil
+            uploadProgress = 0
             
             guard let videoURL = try await loadVideo(from: selectedVideo) else {
                 errorMessage = "Failed to load video"
@@ -44,7 +45,11 @@ final class VideoUploadViewModel: ObservableObject {
                 videoURL: videoURL,
                 userId: userId,
                 caption: caption
-            )
+            ) { progress in
+                Task { @MainActor in
+                    self.uploadProgress = progress
+                }
+            }
             
             try? FileManager.default.removeItem(at: videoURL)
             
@@ -56,12 +61,14 @@ final class VideoUploadViewModel: ObservableObject {
             
         } catch let uploadError as VideoUploadError {
             isUploading = false
+            uploadProgress = 0
             errorMessage = uploadError.localizedDescription
             print("Upload error: \(uploadError.localizedDescription)")
         } catch {
             errorMessage = "Unexpected error: \(error.localizedDescription)"
             print("Unexpected error: \(error)")
             isUploading = false
+            uploadProgress = 0
         }
     }
     

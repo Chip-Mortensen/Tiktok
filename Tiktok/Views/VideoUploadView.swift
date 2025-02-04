@@ -71,6 +71,21 @@ struct VideoUploadView: View {
                     }
             }
             
+            // Upload Progress
+            if viewModel.isUploading {
+                VStack(spacing: 8) {
+                    ProgressView(value: viewModel.uploadProgress, total: 1.0)
+                        .progressViewStyle(.linear)
+                        .tint(.blue)
+                        .padding(.horizontal)
+                    
+                    Text("\(Int(viewModel.uploadProgress * 100))% uploaded")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.vertical)
+            }
+            
             // Upload Button
             let isUploading = viewModel.isUploading
             
