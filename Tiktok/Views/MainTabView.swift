@@ -26,15 +26,12 @@ struct MainTabView: View {
                 .tag(0)
                 .environment(\.tabSelection, $selectedTab)
             
-            Button(action: { showUploadVideo = true }) {
-                Image(systemName: "plus.square")
-                    .font(.system(size: 24))
-            }
-            .tabItem {
-                Image(systemName: "plus")
-                Text("Upload")
-            }
-            .tag(1)
+            VideoUploadView()
+                .tabItem {
+                    Image(systemName: "plus")
+                    Text("Upload")
+                }
+                .tag(1)
             
             ProfileView()
                 .tabItem {
@@ -43,9 +40,6 @@ struct MainTabView: View {
                     Text("Profile")
                 }
                 .tag(2)
-        }
-        .sheet(isPresented: $showUploadVideo) {
-            VideoUploadView()
         }
         .onAppear {
             // Set tab bar appearance
