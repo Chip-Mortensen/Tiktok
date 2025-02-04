@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User rules
+    match /users/{userId} {
+      allow read: if true;  // Anyone can read user profiles
+      allow create: if request.auth != null;  // Authenticated users can create profiles
+      allow update: if request.auth != null && request.auth.uid == userId;  // Users can only update their own profile
+      
+      // User followers/following subcollections
+      match /userFollowers/{followerId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /userFollowing/{followingId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // User Likes collection
+    match /userLikes/{userId}/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Username uniqueness collection
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid &&
+        username.lower() == request.resource.id &&
+        username.matches('^[a-zA-Z0-9_.]+$') &&
+        username.size() >= 3 && username.size() <= 30;
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Video rules
+    match /videos/{videoId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/videos/$(videoId)).data.userId == request.auth.uid;
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

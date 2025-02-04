@@ -9,13 +9,14 @@ class AuthViewModel: ObservableObject {
     @Published var error: String?
     
     private let firestoreService = FirestoreService.shared
+    private var _authStateHandler: AuthStateDidChangeListenerHandle?
     
     init() {
         setupAuthStateListener()
     }
     
     private func setupAuthStateListener() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, firebaseUser in
+        _authStateHandler = Auth.auth().addStateDidChangeListener { [weak self] _, firebaseUser in
             Task { @MainActor in
                 if let firebaseUser = firebaseUser {
                     do {
@@ -23,21 +24,10 @@ class AuthViewModel: ObservableObject {
                         self?.user = user
                         self?.isAuthenticated = true
                     } catch {
-                        // If user doesn't exist in Firestore, create it
-                        if let email = firebaseUser.email {
-                            let newUser = UserModel(
-                                id: firebaseUser.uid,
-                                username: email,
-                                email: email
-                            )
-                            try? await self?.firestoreService.createUser(newUser)
-                            self?.user = newUser
-                            self?.isAuthenticated = true
-                        } else {
-                            self?.isAuthenticated = false
-                            self?.user = nil
-                            self?.error = "Failed to get user email"
-                        }
+                        self?.isAuthenticated = false
+                        self?.user = nil
+                        self?.error = "User data not found. Please sign in again."
+                        try? Auth.auth().signOut()
                     }
                 } else {
                     self?.isAuthenticated = false
@@ -47,15 +37,46 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    deinit {
+        if let handler = _authStateHandler {
+            Auth.auth().removeStateDidChangeListener(handler)
+        }
+    }
+    
     func signUp(email: String, password: String, username: String) async {
         do {
+            // Validate username
+            guard !username.isEmpty else {
+                self.error = "Username is required"
+                return
+            }
+            
+            // Validate username format
+            let usernameRegex = try Regex(#"^[a-zA-Z0-9_.]+$"#)
+            guard username.count >= 3,
+                  username.count <= 30,
+                  username.contains(usernameRegex) else {
+                self.error = "Username must be 3-30 characters and can only contain letters, numbers, underscores, and periods."
+                return
+            }
+            
+            // Check if username is available
+            guard try await firestoreService.isUsernameAvailable(username) else {
+                self.error = "Username is already taken"
+                return
+            }
+            
+            // Create auth user
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
+            
+            // Create user document
             let user = UserModel(
                 id: result.user.uid,
-                username: email,
-                email: email
+                email: email,
+                username: username
             )
             try await firestoreService.createUser(user)
+            
             self.user = user
             self.isAuthenticated = true
             self.error = nil

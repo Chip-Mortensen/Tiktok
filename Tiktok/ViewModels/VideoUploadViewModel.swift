@@ -4,14 +4,25 @@ import PhotosUI
 import AVFoundation
 
 @MainActor
-class VideoUploadViewModel: ObservableObject {
-    @Published var isUploading = false
-    @Published var uploadProgress: Double = 0
-    @Published var errorMessage: String?
-    @Published var selectedVideo: PhotosPickerItem? = nil
+final class VideoUploadViewModel: ObservableObject {
+    @Published private(set) var isUploading = false
+    @Published private(set) var uploadProgress: Double = 0
+    @Published private(set) var errorMessage: String?
     @Published var caption: String = ""
+    @Published var selectedVideo: PhotosPickerItem? {
+        didSet {
+            Task { @MainActor in
+                hasSelectedVideo = selectedVideo != nil
+            }
+        }
+    }
+    @Published var hasSelectedVideo = false
     
     private let videoUploadService = VideoUploadService.shared
+    
+    func clearError() {
+        errorMessage = nil
+    }
     
     func uploadVideo(userId: String) async {
         guard let selectedVideo = selectedVideo else {
@@ -23,33 +34,30 @@ class VideoUploadViewModel: ObservableObject {
             isUploading = true
             errorMessage = nil
             
-            // Load video data from PhotosPickerItem
             guard let videoURL = try await loadVideo(from: selectedVideo) else {
                 errorMessage = "Failed to load video"
                 isUploading = false
                 return
             }
             
-            // Upload video
             _ = try await videoUploadService.uploadVideo(
                 videoURL: videoURL,
                 userId: userId,
                 caption: caption
             )
             
-            // Clean up temporary file
             try? FileManager.default.removeItem(at: videoURL)
             
-            // Reset state
             isUploading = false
             self.selectedVideo = nil
             caption = ""
             uploadProgress = 0
+            errorMessage = nil
             
         } catch let uploadError as VideoUploadError {
             isUploading = false
             errorMessage = uploadError.localizedDescription
-            print("Video upload error: \(uploadError.localizedDescription)")
+            print("Upload error: \(uploadError.localizedDescription)")
         } catch {
             isUploading = false
             errorMessage = "Unexpected error: \(error.localizedDescription)"
@@ -59,7 +67,6 @@ class VideoUploadViewModel: ObservableObject {
     
     private func loadVideo(from item: PhotosPickerItem) async throws -> URL? {
         if let videoData = try await item.loadTransferable(type: Data.self) {
-            // Create temporary file
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
             try videoData.write(to: tempURL)
             return tempURL

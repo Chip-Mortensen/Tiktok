@@ -21,12 +21,20 @@ struct VideoUploadView: View {
                 .padding(.bottom, 40)
                 
                 // Video Picker
+                let hasVideo = viewModel.hasSelectedVideo
+                
                 PhotosPicker(
                     selection: $viewModel.selectedVideo,
                     matching: .videos,
                     photoLibrary: .shared()
                 ) {
-                    if viewModel.selectedVideo == nil {
+                    if hasVideo {
+                        Label("Video Selected", systemImage: "checkmark.circle.fill")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 200)
+                            .background(Color(.systemGreen).opacity(0.2))
+                            .cornerRadius(12)
+                    } else {
                         VStack {
                             Image(systemName: "video.badge.plus")
                                 .font(.system(size: 40))
@@ -37,12 +45,6 @@ struct VideoUploadView: View {
                         .frame(height: 200)
                         .background(Color(.systemGray6))
                         .cornerRadius(12)
-                    } else {
-                        Label("Video Selected", systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 200)
-                            .background(Color(.systemGreen).opacity(0.2))
-                            .cornerRadius(12)
                     }
                 }
                 .padding(.horizontal)
@@ -60,37 +62,38 @@ struct VideoUploadView: View {
                         .font(.caption)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                        .onAppear {
+                            Task {
+                                try? await Task.sleep(for: .seconds(5))
+                                await MainActor.run {
+                                    viewModel.clearError()
+                                }
+                            }
+                        }
                 }
                 
                 // Upload Button
-                Button {
+                let isUploading = viewModel.isUploading
+                
+                UploadButton(
+                    isUploading: isUploading,
+                    hasSelectedVideo: hasVideo
+                ) {
                     guard let userId = authViewModel.user?.id else {
-                        viewModel.errorMessage = "User not logged in"
+                        viewModel.clearError()
                         return
                     }
                     
                     Task {
                         await viewModel.uploadVideo(userId: userId)
-                        if viewModel.errorMessage == nil {
-                            dismiss()
+                        await MainActor.run {
+                            if viewModel.errorMessage == nil {
+                                dismiss()
+                            }
                         }
                     }
-                } label: {
-                    HStack {
-                        Text(viewModel.isUploading ? "Uploading..." : "Upload Video")
-                            .fontWeight(.semibold)
-                        if viewModel.isUploading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(viewModel.selectedVideo == nil ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(15)
                 }
-                .disabled(viewModel.selectedVideo == nil || viewModel.isUploading)
+                .disabled(!hasVideo || isUploading)
                 .padding(.horizontal)
                 
                 Spacer()
@@ -104,6 +107,31 @@ struct VideoUploadView: View {
                     .disabled(viewModel.isUploading)
                 }
             }
+        }
+    }
+}
+
+// Separate component to handle button styling
+struct UploadButton: View {
+    let isUploading: Bool
+    let hasSelectedVideo: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(isUploading ? "Uploading..." : "Upload Video")
+                    .fontWeight(.semibold)
+                if isUploading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(hasSelectedVideo ? Color.blue : Color.gray)
+            .foregroundColor(.white)
+            .cornerRadius(15)
         }
     }
 }

@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Video files
+    match /videos/{userId}/{videoId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Thumbnail images
+    match /thumbnails/{userId}/{videoId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Profile images
+    match /profile-images/{userId}/{imageId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                  request.auth.uid == userId &&
+                  request.resource.size < 5 * 1024 * 1024 && // 5MB
+                  request.resource.contentType.matches('image/.*');
+    }
+
+    // Default deny rule
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+} 

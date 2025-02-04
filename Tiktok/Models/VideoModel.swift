@@ -3,12 +3,16 @@ import Foundation
 struct VideoModel: Identifiable, Codable {
     let id: String
     let userId: String
+    var username: String?
     let videoUrl: String
     let caption: String
     var likes: Int
     var comments: [Comment]
     let timestamp: Date
-    var thumbnailUrl: String?
+    let thumbnailUrl: String?
+    
+    // Not persisted to Firestore, used for UI state
+    var isLiked: Bool = false
     
     struct Comment: Identifiable, Codable {
         let id: String
@@ -29,19 +33,34 @@ struct VideoModel: Identifiable, Codable {
     
     init(id: String = UUID().uuidString,
          userId: String,
+         username: String?,
          videoUrl: String,
          caption: String,
          likes: Int = 0,
          comments: [Comment] = [],
          timestamp: Date = Date(),
-         thumbnailUrl: String? = nil) {
+         thumbnailUrl: String? = nil,
+         isLiked: Bool = false) {
         self.id = id
         self.userId = userId
+        self.username = username
         self.videoUrl = videoUrl
         self.caption = caption
         self.likes = likes
         self.comments = comments
         self.timestamp = timestamp
         self.thumbnailUrl = thumbnailUrl
+        self.isLiked = isLiked
+    }
+    
+    // Mutating functions for state updates
+    mutating func like() {
+        likes += 1
+        isLiked = true
+    }
+    
+    mutating func unlike() {
+        likes -= 1
+        isLiked = false
     }
 } 

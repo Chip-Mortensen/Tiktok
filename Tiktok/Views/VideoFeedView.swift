@@ -27,6 +27,7 @@ extension View {
 // MARK: - Main View
 struct VideoFeedView: View {
     @StateObject private var viewModel = VideoFeedViewModel()
+    @StateObject private var profileViewModel = ProfileViewModel()
     @State private var currentIndex: Int = 0
     
     var body: some View {
@@ -48,11 +49,11 @@ struct VideoFeedView: View {
                 } else if viewModel.isLoading {
                     ProgressView()
                 } else {
-                    // Video pager will go here
                     VideoPager(
-                        videos: viewModel.videos,
+                        videos: $viewModel.videos,
                         currentIndex: $currentIndex
                     )
+                    .environmentObject(profileViewModel)
                 }
             }
             .customNavigationBar()
@@ -68,7 +69,7 @@ struct VideoFeedView: View {
 
 // MARK: - Video Pager
 struct VideoPager: View {
-    let videos: [VideoModel]
+    @Binding var videos: [VideoModel]
     @Binding var currentIndex: Int
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
@@ -80,9 +81,9 @@ struct VideoPager: View {
                 
                 // Stack of videos
                 VStack(spacing: 0) {
-                    ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
+                    ForEach(Array(videos.enumerated()), id: \.element.id) { index, _ in
                         VideoPlayerContainer(
-                            video: video,
+                            video: $videos[index],
                             isActive: currentIndex == index
                         )
                         .frame(width: geometry.size.width, height: geometry.size.height)
@@ -138,21 +139,14 @@ struct VideoPager: View {
     }
 }
 
-// MARK: - Array Extension
-extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
-
 // MARK: - Video Player Container
 struct VideoPlayerContainer: View {
-    let video: VideoModel
+    @Binding var video: VideoModel
     let isActive: Bool
     
     var body: some View {
         GeometryReader { geometry in
-            VideoContent(video: video, isActive: isActive)
+            VideoContent(video: $video, isActive: isActive)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped() // Ensure content is cropped if it overflows
         }
@@ -161,10 +155,11 @@ struct VideoPlayerContainer: View {
 
 // MARK: - Video Content
 struct VideoContent: View {
-    let video: VideoModel
+    @Binding var video: VideoModel
     let isActive: Bool
     @State private var player: AVPlayer?
     @State private var isPlaying = false
+    @EnvironmentObject private var viewModel: ProfileViewModel
     
     var body: some View {
         ZStack {
@@ -185,10 +180,90 @@ struct VideoContent: View {
                 AsyncImage(url: url) { image in
                     image
                         .resizable()
-                        .aspectRatio(contentMode: .fill) // Fill available space
+                        .aspectRatio(contentMode: .fill)
                         .clipped()
                 } placeholder: {
                     Color.black
+                }
+            }
+            
+            // Action buttons overlay
+            VStack {
+                Spacer()
+                HStack {
+                    // Video info (left side)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("@\(video.username ?? "user")")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text(video.caption)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    
+                    // Action buttons (right side)
+                    VStack(spacing: 20) {
+                        // Like Button
+                        Button {
+                            Task {
+                                if video.isLiked {
+                                    await viewModel.unlikeVideo(video.id)
+                                    video.unlike()
+                                } else {
+                                    await viewModel.likeVideo(video.id)
+                                    video.like()
+                                }
+                            }
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: video.isLiked ? "heart.fill" : "heart")
+                                    .font(.title)
+                                    .foregroundColor(video.isLiked ? .red : .white)
+                                Text("\(video.likes)")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        
+                        // Comment Button (placeholder)
+                        Button {
+                            // TODO: Implement comments
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "bubble.right")
+                                    .font(.title)
+                                Text("\(video.comments.count)")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.white)
+                        }
+                        
+                        // Share Button (placeholder)
+                        Button {
+                            // TODO: Implement share
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.right")
+                                    .font(.title)
+                                Text("Share")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.white)
+                        }
+                        
+                        // Bookmark Button (placeholder)
+                        Button {
+                            // TODO: Implement bookmarks
+                        } label: {
+                            Image(systemName: "bookmark")
+                                .font(.title)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding()
                 }
             }
         }
@@ -196,9 +271,13 @@ struct VideoContent: View {
             if isActive {
                 setupAndPlay()
             }
+            // Check if video is liked when view appears
+            Task {
+                video.isLiked = await viewModel.isVideoLiked(video)
+            }
         }
-        .onChange(of: isActive) { newValue in
-            if newValue {
+        .onChange(of: isActive) { wasActive, isNowActive in
+            if isNowActive {
                 setupAndPlay()
             } else {
                 player?.pause()

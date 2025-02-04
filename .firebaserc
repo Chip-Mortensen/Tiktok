@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "tiktok-b4300"
+  },
+  "targets": {
+    "tiktok-b4300": {
+      "storage": {
+        "rules": [
+          "tiktok-b4300.appspot.com"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

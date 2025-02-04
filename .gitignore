@@ -31,9 +31,12 @@ Carthage/Build
 
 # Firebase & Google Services
 GoogleService-Info.plist  # DO NOT COMMIT THIS FILE (contains sensitive API keys)
-Firebase/
-Crashlytics/
-fabric.properties
+.firebase/
+firebase-debug.log
+ui-debug.log
+database-debug.log
+firestore-debug.log
+pubsub-debug.log
 
 # Fastlane (if used)
 fastlane/report.xml

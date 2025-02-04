@@ -11,6 +11,7 @@ import FirebaseAuth
 struct ContentView: View {
     @State private var email = ""
     @State private var password = ""
+    @State private var username = ""
     @State private var isSignUp = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
@@ -32,6 +33,13 @@ struct ContentView: View {
                 
                 // Input Fields
                 VStack(spacing: 15) {
+                    if isSignUp {
+                        TextField("Username", text: $username)
+                            .textFieldStyle(CustomTextFieldStyle())
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                    
                     TextField("Email", text: $email)
                         .textFieldStyle(CustomTextFieldStyle())
                         .autocapitalization(.none)
@@ -54,7 +62,7 @@ struct ContentView: View {
                 Button {
                     Task {
                         if isSignUp {
-                            await authViewModel.signUp(email: email, password: password, username: email)
+                            await authViewModel.signUp(email: email, password: password, username: username)
                         } else {
                             await authViewModel.signIn(email: email, password: password)
                         }
@@ -63,26 +71,26 @@ struct ContentView: View {
                     HStack {
                         Text(isSignUp ? "Create Account" : "Sign In")
                             .fontWeight(.semibold)
-                        if authViewModel.isAuthenticated {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .frame(height: 44)
                     .background(Color.blue)
                     .foregroundColor(.white)
-                    .cornerRadius(15)
+                    .cornerRadius(8)
                 }
-                .padding(.horizontal)
+                .disabled(isSignUp && (username.isEmpty || email.isEmpty || password.isEmpty) || 
+                         !isSignUp && (email.isEmpty || password.isEmpty))
                 
                 // Toggle Sign In/Up
-                Button(action: { isSignUp.toggle() }) {
+                Button {
+                    isSignUp.toggle()
+                    authViewModel.error = nil
+                } label: {
                     Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
                         .foregroundColor(.blue)
                 }
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 32)
         }
     }
 }

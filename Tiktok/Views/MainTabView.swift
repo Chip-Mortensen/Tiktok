@@ -24,7 +24,7 @@ struct MainTabView: View {
             }
             .tag(1)
             
-            Text("Profile")
+            ProfileView()
                 .tabItem {
                     Image(systemName: "person")
                         .environment(\.symbolVariants, selectedTab == 2 ? .fill : .none)
