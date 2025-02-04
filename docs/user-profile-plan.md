@@ -1,164 +1,108 @@
-# User Profile Implementation Plan
+# User Profile & Following System Implementation Plan
 
-## 1. Firestore Schema Updates
+## 1. Database Schema
 
-1. Add username uniqueness handling:
+1. Add following collection:
 
-   - Create a separate 'usernames' collection for uniqueness validation
-   - Each document ID is the lowercase username
-   - Document contains reference to user document
+   ```
+   following/{userId}/following/{followedUserId}
+     - timestamp: Date
+   ```
 
-2. Update user documents in 'users' collection:
+2. Update user document counters:
 
-   - bio (string)
-   - profileImageUrl (string)
-   - followingCount (number)
-   - followersCount (number)
-   - likesCount (number)
-   - postsCount (number)
+   ```
+   users/{userId}
+     - followingCount: number
+     - followersCount: number
+   ```
 
-3. Create supporting collections:
+3. Security rules:
+   ```
+   match /following/{userId}/following/{followedId} {
+     allow read;
+     allow write: if request.auth != null && request.auth.uid == userId;
+   }
+   ```
 
-   - followers/{userId}/userFollowers/{followerId}
-   - following/{userId}/userFollowing/{followingId}
-   - userLikes/{userId}/likedVideos/{videoId}
+## 2. User Profile Navigation
 
-4. Security Rules:
-   - Ensure username uniqueness at the Firestore rules level
-   - Protect user data with appropriate read/write rules
-   - Validate field types and required fields
+1. Profile Discovery:
 
-## 2. Backend API Endpoints
+   - Make usernames in video feed tappable
+   - Navigate to user profile when username is tapped
+   - Pass userId through navigation
 
-1. User Profile Management:
+2. User Profile View:
+   - Create new UserProfileView for viewing other users
+   - Share layout with current ProfileView but:
+     - Replace edit button with follow/unfollow
+     - Hide private features (liked videos tab)
+     - Show following status
+   - Handle viewing own profile case
 
-   - GET /api/users/:username - Get user profile
-   - PUT /api/users/:username - Update user profile
-   - POST /api/users/upload-profile-image - Upload profile image
+## 3. Following System
 
-2. Social Relationships:
+1. FirestoreService Extensions:
 
-   - POST /api/users/:username/follow - Follow a user
-   - DELETE /api/users/:username/follow - Unfollow a user
-   - GET /api/users/:username/followers - Get user's followers
-   - GET /api/users/:username/following - Get user's following
+   ```swift
+   // Core following operations
+   func followUser(userId: String) async throws
+   func unfollowUser(userId: String) async throws
+   func isFollowingUser(userId: String) async throws -> Bool
 
-3. User Content:
-   - GET /api/users/:username/videos - Get user's videos
-   - GET /api/users/:username/liked-videos - Get videos liked by user
+   // Real-time updates
+   func addFollowingStatusListener(userId: String) -> ListenerRegistration
 
-## 3. Frontend Implementation
+   // Queries
+   func getFollowers(forUserId: String) async throws -> [UserModel]
+   func getFollowing(forUserId: String) async throws -> [UserModel]
+   ```
 
-### 3.1 Profile View Components
+2. UserProfileViewModel:
+   - Track following status
+   - Handle follow/unfollow actions
+   - Update counters optimistically
+   - Manage error states and rollbacks
+   - Cache following status
 
-1. Profile Header:
+## 4. Implementation Steps
 
-   - Profile image with upload capability
-   - Username display
-   - Follow/Edit Profile button
-   - Stats display (following, followers, likes)
-   - Bio text
+1. Database Layer:
 
-2. Content Grid:
-   - Grid view of user's videos
-   - Video thumbnails
-   - Video stats overlay
-   - Tab system for different content types (posts, likes, etc.)
+   - Set up following collection
+   - Add following methods to FirestoreService
+   - Implement counter updates using transactions
 
-### 3.2 Profile Edit Flow
+2. View Layer:
 
-1. Edit Profile Sheet:
+   - Create UserProfileView
+   - Add username navigation in VideoContent
+   - Implement follow button with states
+   - Add loading and error states
 
-   - Profile image editor
-   - Username input (with availability check)
-   - Bio input
-   - Save/Cancel buttons
-
-2. Profile Image Upload:
-   - Image picker integration
-   - Image cropping functionality
-   - Upload progress indicator
-
-### 3.3 Social Features
-
-1. Follow/Unfollow Functionality:
-
-   - Follow button states
-   - Follow/unfollow animations
-   - Counter updates
-
-2. Followers/Following Lists:
-   - User list views
-   - Quick follow/unfollow buttons
-   - Navigation to user profiles
-
-## 4. Implementation Order
-
-### Phase 1: Core Profile
-
-1. Update database schema
-2. Implement basic profile API endpoints
-3. Create profile view layout
-4. Add profile image upload
-5. Implement profile editing
-
-### Phase 2: Content Display
-
-1. Create video grid component
-2. Implement video fetching
-3. Add tab system for content types
-4. Implement video preview/playback
-
-### Phase 3: Social Features
-
-1. Implement follow system
-2. Create followers/following views
-3. Add social counters
-4. Implement notifications
-
-### Phase 4: Polish
-
-1. Add loading states
-2. Implement error handling
-3. Add animations and transitions
-4. Optimize performance
-5. Add pull-to-refresh
+3. ViewModel Layer:
+   - Create UserProfileViewModel
+   - Implement following status management
+   - Add real-time updates
+   - Handle optimistic updates
 
 ## 5. Technical Considerations
 
-### Database
+1. Performance:
 
-1. Indexing strategy for username lookups
-2. Efficient counting for followers/following
-3. Caching strategy for profile data
-4. Transaction handling for social actions
+   - Use transactions for counter updates
+   - Cache following status locally
+   - Implement pagination for followers/following lists
 
-### Performance
+2. Error Handling:
 
-1. Lazy loading for video grid
-2. Image caching and optimization
-3. Pagination for followers/following lists
-4. Optimistic UI updates
+   - Handle network failures gracefully
+   - Provide clear error messages
+   - Implement retry mechanisms
 
-### Security
-
-1. Username validation rules
-2. Profile image size/type restrictions
-3. Rate limiting for social actions
-4. Permission checking for profile edits
-
-### Testing
-
-1. Unit tests for profile logic
-2. Integration tests for social features
-3. UI tests for edit flows
-4. Performance testing for grid view
-
-## 6. Nice-to-Have Features
-
-1. Profile verification badges
-2. Profile themes/customization
-3. Private account settings
-4. Blocked users management
-5. Profile sharing functionality
-6. Activity history/analytics
+3. Edge Cases:
+   - Prevent self-following
+   - Handle deleted user accounts
+   - Manage concurrent follow/unfollow attempts
+   - Handle blocked users (future feature)

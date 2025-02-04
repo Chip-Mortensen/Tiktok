@@ -17,10 +17,10 @@ struct VideoGridView: View {
                     VideoThumbnailView(video: $videos[index]) {
                         onVideoTap(videos[index])
                     }
-                    .frame(height: 200)
                 }
             }
-            .padding(1)
+            .padding(.horizontal, 1)
+            .padding(.top, 4) // Just a tiny bit of space between tabs and grid
         }
         .background(Color(.systemBackground))
     }

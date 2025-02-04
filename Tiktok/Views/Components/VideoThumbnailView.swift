@@ -41,12 +41,14 @@ struct VideoThumbnailView: View {
                         .foregroundColor(.white)
                         .font(.caption)
                 }
+                .padding(6)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(6)
                 .padding(8)
-                .shadow(radius: 2)
             }
         }
-        .aspectRatio(9/16, contentMode: .fill)
+        .aspectRatio(9/16, contentMode: .fit)
         .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 } 

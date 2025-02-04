@@ -9,90 +9,73 @@ struct ProfileView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Profile Header
-                    VStack(spacing: 16) {
-                        // Profile Image
-                        if let profileImageUrl = viewModel.user?.profileImageUrl {
-                            AsyncImage(url: URL(string: profileImageUrl)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 96, height: 96)
-                                    .clipShape(Circle())
-                            } placeholder: {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 96, height: 96)
-                            }
-                        } else {
+            VStack(spacing: 0) {
+                // Profile Header
+                VStack(spacing: 16) {
+                    // Profile Image
+                    if let profileImageUrl = viewModel.user?.profileImageUrl {
+                        AsyncImage(url: URL(string: profileImageUrl)) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 96, height: 96)
+                                .clipShape(Circle())
+                        } placeholder: {
                             Circle()
                                 .fill(Color.gray.opacity(0.2))
                                 .frame(width: 96, height: 96)
                         }
-                        
-                        // Username
-                        Text(viewModel.user?.username ?? "")
-                            .font(.headline)
-                        
-                        // Stats Row
-                        HStack(spacing: 32) {
-                            StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
-                            StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
-                            StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
-                        }
-                        
-                        // Bio
-                        if let bio = viewModel.user?.bio {
-                            Text(bio)
-                                .font(.subheadline)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
-                        
-                        // Edit Profile Button
-                        Button {
-                            showEditProfile = true
-                        } label: {
-                            Text("Edit Profile")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(width: 360, height: 32)
-                                .foregroundColor(.black)
-                                .background(Color.gray.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 96, height: 96)
                     }
-                    .padding(.vertical)
-                    .padding(.horizontal)
                     
-                    // Stats row
-                    HStack(spacing: 20) {
-                        StatColumn(count: viewModel.posts.count, title: "Posts")
-                        StatColumn(count: viewModel.likedPosts.count, title: "Liked")
+                    // Username
+                    Text(viewModel.user?.username ?? "")
+                        .font(.headline)
+                    
+                    // Stats Row
+                    HStack(spacing: 32) {
+                        StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
+                        StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
+                        StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
                     }
-                    .padding(.vertical)
                     
-                    // Tab Bar
-                    ProfileTabBar(selectedTab: $selectedTab)
-                    
-                    // Tab View for Posts and Liked Posts
-                    TabView(selection: $selectedTab) {
-                        PostsGridView(viewModel: viewModel)
-                            .tag(0)
-                        
-                        LikedPostsGridView(viewModel: viewModel)
-                            .tag(1)
+                    // Bio
+                    if let bio = viewModel.user?.bio {
+                        Text(bio)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     }
-                    .frame(height: UIScreen.main.bounds.height * 0.7)
-                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
+                .padding(.vertical)
+                .padding(.horizontal)
+                
+                // Tab Bar
+                ProfileTabBar(selectedTab: $selectedTab)
+                
+                // Tab View for Posts and Liked Posts
+                TabView(selection: $selectedTab) {
+                    PostsGridView(viewModel: viewModel)
+                        .tag(0)
+                    
+                    LikedPostsGridView(viewModel: viewModel)
+                        .tag(1)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
+                        Button {
+                            showEditProfile = true
+                        } label: {
+                            Label("Edit Profile", systemImage: "pencil")
+                        }
+                        
                         Button(role: .destructive) {
                             viewModel.signOut()
                         } label: {

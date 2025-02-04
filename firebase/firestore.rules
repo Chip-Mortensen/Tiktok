@@ -5,7 +5,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;  // Anyone can read user profiles
       allow create: if request.auth != null;  // Authenticated users can create profiles
-      allow update: if request.auth != null && request.auth.uid == userId;  // Users can only update their own profile
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||  // User can update their own profile
+        (
+          // Allow updating only follower/following counts from other users
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount']) &&
+          // Ensure the increment is only +1 or -1
+          (
+            math.abs(request.resource.data.followersCount - resource.data.followersCount) <= 1 ||
+            math.abs(request.resource.data.followingCount - resource.data.followingCount) <= 1
+          )
+        )
+      );
       
       // User followers/following subcollections
       match /userFollowers/{followerId} {
@@ -17,6 +28,23 @@ service cloud.firestore {
         allow read: if true;
         allow write: if request.auth != null && request.auth.uid == userId;
       }
+    }
+    
+    // Following collection rules (root level)
+    match /following/{userId}/following/{targetUserId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Following collection rules (user subcollection)
+    match /users/{userId}/userFollowing/{targetUserId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/userFollowers/{followerId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.uid == userId || request.auth.uid == followerId);
     }
     
     // User Likes collection

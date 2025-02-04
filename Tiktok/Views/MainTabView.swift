@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct TabSelectionKey: EnvironmentKey {
+    static let defaultValue: Binding<Int> = .constant(0)
+}
+
+extension EnvironmentValues {
+    var tabSelection: Binding<Int> {
+        get { self[TabSelectionKey.self] }
+        set { self[TabSelectionKey.self] = newValue }
+    }
+}
+
 struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var showUploadVideo = false
@@ -13,6 +24,7 @@ struct MainTabView: View {
                     Text("Home")
                 }
                 .tag(0)
+                .environment(\.tabSelection, $selectedTab)
             
             Button(action: { showUploadVideo = true }) {
                 Image(systemName: "plus.square")

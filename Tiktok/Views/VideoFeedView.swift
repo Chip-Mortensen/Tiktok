@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import FirebaseAuth
 
 // MARK: - Navigation Bar Styling
 struct NavigationBarModifier: ViewModifier {
@@ -28,6 +29,7 @@ extension View {
 struct VideoFeedView: View {
     @StateObject private var viewModel = VideoFeedViewModel()
     @StateObject private var profileViewModel = ProfileViewModel()
+    @EnvironmentObject private var appState: AppState
     @State private var currentIndex: Int = 0
     
     var body: some View {
@@ -54,6 +56,7 @@ struct VideoFeedView: View {
                         currentIndex: $currentIndex
                     )
                     .environmentObject(profileViewModel)
+                    .environmentObject(appState)
                 }
             }
             .customNavigationBar()
@@ -73,6 +76,8 @@ struct VideoPager: View {
     @Binding var currentIndex: Int
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var appState: AppState
     
     var body: some View {
         GeometryReader { geometry in
@@ -89,52 +94,34 @@ struct VideoPager: View {
                         .frame(width: geometry.size.width, height: geometry.size.height)
                     }
                 }
-                .offset(y: -CGFloat(currentIndex) * geometry.size.height + dragOffset)
-                .animation(isDragging ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: currentIndex)
-                .animation(isDragging ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
+                .offset(y: -CGFloat(currentIndex) * geometry.size.height)
+                .offset(y: dragOffset)
                 .gesture(
                     DragGesture()
                         .onChanged { value in
-                            // Prevent dragging down at the top
-                            if value.translation.height > 0 && currentIndex == 0 {
-                                let dampedOffset = value.translation.height / 3 // Add resistance
-                                dragOffset = dampedOffset
-                            }
-                            // Prevent dragging up at the bottom
-                            else if value.translation.height < 0 && currentIndex == videos.count - 1 {
-                                let dampedOffset = value.translation.height / 3 // Add resistance
-                                dragOffset = dampedOffset
-                            }
-                            // Normal dragging
-                            else {
-                                isDragging = true
-                                dragOffset = value.translation.height
-                            }
+                            isDragging = true
+                            dragOffset = value.translation.height
                         }
                         .onEnded { value in
                             isDragging = false
+                            dragOffset = 0
                             
-                            // Calculate velocity and threshold
-                            let velocity = value.predictedEndTranslation.height - value.translation.height
-                            let threshold = geometry.size.height * 0.2 // 20% threshold for swipe
+                            let height = geometry.size.height
+                            let dragThreshold = height * 0.2
+                            let draggedDistance = value.translation.height
+                            let predictedEndLocation = value.predictedEndLocation.y
                             
-                            // Determine if we should change index based on drag distance or velocity
-                            if abs(value.translation.height) > threshold || abs(velocity) > 500 {
-                                if value.translation.height < 0 && currentIndex < videos.count - 1 {
-                                    // Swipe up to next video
-                                    currentIndex += 1
-                                } else if value.translation.height > 0 && currentIndex > 0 {
-                                    // Swipe down to previous video
-                                    currentIndex -= 1
+                            if abs(draggedDistance) > dragThreshold || abs(predictedEndLocation) > dragThreshold {
+                                let newIndex = draggedDistance > 0 ? currentIndex - 1 : currentIndex + 1
+                                if newIndex >= 0 && newIndex < videos.count {
+                                    withAnimation {
+                                        currentIndex = newIndex
+                                    }
                                 }
                             }
-                            
-                            // Reset drag offset with animation
-                            dragOffset = 0
                         }
                 )
             }
-            .clipped() // Ensure only one video is visible at a time
         }
     }
 }
@@ -143,12 +130,16 @@ struct VideoPager: View {
 struct VideoPlayerContainer: View {
     @Binding var video: VideoModel
     let isActive: Bool
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var appState: AppState
     
     var body: some View {
         GeometryReader { geometry in
             VideoContent(video: $video, isActive: isActive)
                 .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped() // Ensure content is cropped if it overflows
+                .clipped()
+                .environmentObject(profileViewModel)
+                .environmentObject(appState)
         }
     }
 }
@@ -160,6 +151,10 @@ struct VideoContent: View {
     @State private var player: AVPlayer?
     @State private var isPlaying = false
     @EnvironmentObject private var viewModel: ProfileViewModel
+    @EnvironmentObject private var appState: AppState
+    @State private var showingProfile = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.tabSelection) private var tabSelection
     
     var body: some View {
         ZStack {
@@ -167,14 +162,15 @@ struct VideoContent: View {
             
             if let player = player {
                 CustomVideoPlayer(player: player)
-                    .onTapGesture {
-                        if isPlaying {
-                            player.pause()
-                        } else {
-                            player.play()
-                        }
-                        isPlaying.toggle()
-                    }
+                    .gesture(
+                        TapGesture()
+                            .onEnded { _ in
+                                // Only handle mute toggle if not interacting with other UI elements
+                                if !showingProfile {
+                                    appState.isMuted.toggle()
+                                }
+                            }
+                    )
             } else if let thumbnailUrl = video.thumbnailUrl,
                       let url = URL(string: thumbnailUrl) {
                 AsyncImage(url: url) { image in
@@ -190,19 +186,37 @@ struct VideoContent: View {
             // Action buttons overlay
             VStack {
                 Spacer()
-                HStack {
+                HStack(alignment: .bottom, spacing: 0) {
                     // Video info (left side)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("@\(video.username ?? "user")")
-                            .font(.headline)
-                            .foregroundColor(.white)
+                        Button {
+                            print("DEBUG: Username tapped, showing profile for: \(video.username ?? "unknown")")
+                            player?.pause()
+                            isPlaying = false
+                            
+                            if video.userId == Auth.auth().currentUser?.uid {
+                                // If it's the current user's video, switch to profile tab
+                                dismiss()
+                                tabSelection.wrappedValue = 2 // Profile tab
+                            } else {
+                                // If it's another user's video, show profile sheet
+                                showingProfile = true
+                            }
+                        } label: {
+                            Text("@\(video.username ?? "user")")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         Text(video.caption)
                             .font(.subheadline)
                             .foregroundColor(.white)
+                            .lineLimit(2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.bottom, 60)
                     
                     // Action buttons (right side)
                     VStack(spacing: 20) {
@@ -262,10 +276,32 @@ struct VideoContent: View {
                                 .font(.title)
                                 .foregroundColor(.white)
                         }
+                        
+                        // Sound indicator
+                        Image(systemName: appState.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(.top, 10)
                     }
                     .padding()
                 }
             }
+        }
+        .onChange(of: showingProfile) { _, isShowing in
+            print("DEBUG: Profile sheet state changed - isShowing: \(isShowing)")
+            if isShowing {
+                player?.pause()
+                isPlaying = false
+            } else if isActive {
+                player?.play()
+                isPlaying = true
+            }
+        }
+        .sheet(isPresented: $showingProfile) {
+            NavigationView {
+                UserProfileView(userId: video.userId)
+            }
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             if isActive {
@@ -289,12 +325,29 @@ struct VideoContent: View {
             player = nil
             isPlaying = false
         }
+        .onChange(of: appState.isMuted) { _, isMuted in
+            // Update player mute state whenever global state changes
+            player?.isMuted = isMuted
+        }
     }
     
     private func setupAndPlay() {
         if player == nil, let videoUrl = URL(string: video.videoUrl) {
             let playerItem = AVPlayerItem(url: videoUrl)
             player = AVPlayer(playerItem: playerItem)
+            
+            // Set up looping
+            NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak player] _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
+            
+            // Set initial mute state
+            player?.isMuted = appState.isMuted
         }
         player?.play()
         isPlaying = true

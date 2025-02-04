@@ -12,6 +12,7 @@ import FirebaseAuth
 @main
 struct TiktokApp: App {
     @StateObject private var authViewModel = AuthViewModel()
+    @StateObject private var appState = AppState.shared
     
     init() {
         FirebaseApp.configure()
@@ -23,9 +24,11 @@ struct TiktokApp: App {
                 if authViewModel.isAuthenticated && authViewModel.user != nil {
                     MainTabView()
                         .environmentObject(authViewModel)
+                        .environmentObject(appState)
                 } else {
                     ContentView()
                         .environmentObject(authViewModel)
+                        .environmentObject(appState)
                 }
             }
         }

@@ -1,10 +1,12 @@
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 
 enum FirestoreError: Error {
     case documentNotFound
     case invalidData
     case unknown
+    case selfFollow
 }
 
 class FirestoreService {
@@ -136,7 +138,7 @@ class FirestoreService {
     func fetchVideos(limit: Int = 10) async throws -> [VideoModel] {
         print("Fetching videos from Firestore...")
         let snapshot = try await db.collection("videos")
-            .order(by: "timestamp", descending: true)
+            .order(by: "timestamp", descending: false)
             .limit(to: limit)
             .getDocuments()
         
@@ -189,7 +191,7 @@ class FirestoreService {
         
         let snapshot = try await db.collection("videos")
             .whereField("userId", isEqualTo: userId)
-            .order(by: "timestamp", descending: true)
+            .order(by: "timestamp", descending: false)
             .getDocuments()
         
         print("DEBUG: Found \(snapshot.documents.count) videos for user \(userId)")
@@ -446,5 +448,148 @@ class FirestoreService {
                 let videoIds = documents.map { $0.documentID }
                 onChange(videoIds)
             }
+    }
+    
+    // MARK: - Following Methods
+    
+    func followUser(userId: String) async throws {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        guard currentUserId != userId else { throw FirestoreError.selfFollow }
+        
+        let batch = db.batch()
+        
+        // Add following relationship
+        let followingRef = db.collection("users")
+            .document(currentUserId)
+            .collection("userFollowing")
+            .document(userId)
+        
+        batch.setData([
+            "timestamp": FieldValue.serverTimestamp()
+        ], forDocument: followingRef)
+        
+        // Add to followers collection
+        let followerRef = db.collection("users")
+            .document(userId)
+            .collection("userFollowers")
+            .document(currentUserId)
+        
+        batch.setData([
+            "timestamp": FieldValue.serverTimestamp()
+        ], forDocument: followerRef)
+        
+        // Update follower count for followed user
+        let followedUserRef = db.collection("users").document(userId)
+        batch.updateData([
+            "followersCount": FieldValue.increment(Int64(1))
+        ], forDocument: followedUserRef)
+        
+        // Update following count for current user
+        let currentUserRef = db.collection("users").document(currentUserId)
+        batch.updateData([
+            "followingCount": FieldValue.increment(Int64(1))
+        ], forDocument: currentUserRef)
+        
+        try await batch.commit()
+    }
+    
+    func unfollowUser(userId: String) async throws {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        guard currentUserId != userId else { throw FirestoreError.selfFollow }
+        
+        let batch = db.batch()
+        
+        // Remove following relationship
+        let followingRef = db.collection("users")
+            .document(currentUserId)
+            .collection("userFollowing")
+            .document(userId)
+        
+        batch.deleteDocument(followingRef)
+        
+        // Remove from followers collection
+        let followerRef = db.collection("users")
+            .document(userId)
+            .collection("userFollowers")
+            .document(currentUserId)
+        
+        batch.deleteDocument(followerRef)
+        
+        // Update follower count for unfollowed user
+        let followedUserRef = db.collection("users").document(userId)
+        batch.updateData([
+            "followersCount": FieldValue.increment(Int64(-1))
+        ], forDocument: followedUserRef)
+        
+        // Update following count for current user
+        let currentUserRef = db.collection("users").document(currentUserId)
+        batch.updateData([
+            "followingCount": FieldValue.increment(Int64(-1))
+        ], forDocument: currentUserRef)
+        
+        try await batch.commit()
+    }
+    
+    func isFollowingUser(userId: String) async throws -> Bool {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return false }
+        
+        let followingRef = db.collection("users")
+            .document(currentUserId)
+            .collection("userFollowing")
+            .document(userId)
+        
+        let snapshot = try await followingRef.getDocument()
+        return snapshot.exists
+    }
+    
+    func addFollowingStatusListener(userId: String, onChange: @escaping (Bool) -> Void) -> ListenerRegistration {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            onChange(false)
+            // Return a no-op listener since we can't create a real one
+            return db.collection("users").document("dummy").addSnapshotListener { _, _ in }
+        }
+        
+        return db.collection("users")
+            .document(currentUserId)
+            .collection("userFollowing")
+            .document(userId)
+            .addSnapshotListener { snapshot, error in
+                guard let snapshot = snapshot else {
+                    print("DEBUG: Error fetching following status: \(error?.localizedDescription ?? "")")
+                    onChange(false)
+                    return
+                }
+                onChange(snapshot.exists)
+            }
+    }
+    
+    func getFollowers(forUserId userId: String) async throws -> [UserModel] {
+        let followersSnapshot = try await db.collection("users")
+            .document(userId)
+            .collection("userFollowers")
+            .getDocuments()
+        
+        var followers: [UserModel] = []
+        for document in followersSnapshot.documents {
+            if let user = try? await getUser(userId: document.documentID) {
+                followers.append(user)
+            }
+        }
+        return followers
+    }
+    
+    func getFollowing(forUserId userId: String) async throws -> [UserModel] {
+        let followingSnapshot = try await db.collection("users")
+            .document(userId)
+            .collection("userFollowing")
+            .getDocuments()
+        
+        var following: [UserModel] = []
+        for document in followingSnapshot.documents {
+            if let user = try? await getUser(userId: document.documentID) {
+                following.append(user)
+            }
+        }
+        return following
     }
 } 
