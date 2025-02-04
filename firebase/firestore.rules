@@ -75,6 +75,24 @@ service cloud.firestore {
         get(/databases/$(database)/documents/videos/$(videoId)).data.userId == request.auth.uid;
     }
     
+    // Comments collection rules
+    match /comments/{commentId} {
+      // Anyone can read comments
+      allow read: if true;
+      // Allow querying comments by videoId
+      allow list: if request.query.limit <= 100 &&
+                 (request.query.filters.size() == 0 ||
+                  (request.query.filters.size() == 1 &&
+                   request.query.filters[0].op == "==" &&
+                   request.query.filters[0].path == ["videoId"]));
+      // Only authenticated users can create comments
+      allow create: if request.auth != null &&
+                      request.resource.data.keys().hasAll(['videoId', 'userId', 'text', 'timestamp']) &&
+                      request.resource.data.userId == request.auth.uid;
+      // Only comment owner can update or delete
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;

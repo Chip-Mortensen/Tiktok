@@ -5,11 +5,12 @@ struct VideoModel: Identifiable, Codable, Hashable {
     let userId: String
     var username: String?
     let videoUrl: String
-    let caption: String
+    var caption: String
     var likes: Int
     var comments: [Comment]
+    var commentsCount: Int
     let timestamp: Date
-    let thumbnailUrl: String?
+    var thumbnailUrl: String?
     
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
@@ -40,7 +41,8 @@ struct VideoModel: Identifiable, Codable, Hashable {
          comments: [Comment] = [],
          timestamp: Date = Date(),
          thumbnailUrl: String? = nil,
-         isLiked: Bool = false) {
+         isLiked: Bool = false,
+         commentsCount: Int = 0) {
         self.id = id
         self.userId = userId
         self.username = username
@@ -51,6 +53,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
         self.timestamp = timestamp
         self.thumbnailUrl = thumbnailUrl
         self.isLiked = isLiked
+        self.commentsCount = commentsCount
     }
     
     // Mutating functions for state updates

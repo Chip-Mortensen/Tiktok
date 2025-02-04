@@ -51,10 +51,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D43475272D52D50D00C95174 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D445E5D22D51335300695987 = {
 			isa = PBXGroup;
 			children = (
 				D445E5DD2D51335300695987 /* Tiktok */,
+				D43475272D52D50D00C95174 /* Frameworks */,
 				D445E5DC2D51335300695987 /* Products */,
 			);
 			sourceTree = "<group>";

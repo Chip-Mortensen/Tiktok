@@ -209,7 +209,8 @@ class FirestoreService {
                 likes: data["likes"] as? Int ?? 0,
                 comments: comments,
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                thumbnailUrl: data["thumbnailUrl"] as? String
+                thumbnailUrl: data["thumbnailUrl"] as? String,
+                commentsCount: data["commentsCount"] as? Int ?? 0
             )
             videos.append(video)
         }
@@ -258,7 +259,8 @@ class FirestoreService {
                 likes: data["likes"] as? Int ?? 0,
                 comments: comments,
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                thumbnailUrl: data["thumbnailUrl"] as? String
+                thumbnailUrl: data["thumbnailUrl"] as? String,
+                commentsCount: data["commentsCount"] as? Int ?? 0
             )
         }
         
@@ -313,7 +315,8 @@ class FirestoreService {
                     likes: data["likes"] as? Int ?? 0,
                     comments: comments,
                     timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                    thumbnailUrl: data["thumbnailUrl"] as? String
+                    thumbnailUrl: data["thumbnailUrl"] as? String,
+                    commentsCount: data["commentsCount"] as? Int ?? 0
                 )
                 videos.append(video)
             }
@@ -391,15 +394,108 @@ class FirestoreService {
             likes: data["likes"] as? Int ?? 0,
             comments: data["comments"] as? [VideoModel.Comment] ?? [],
             timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-            thumbnailUrl: data["thumbnailUrl"] as? String
+            thumbnailUrl: data["thumbnailUrl"] as? String,
+            commentsCount: data["commentsCount"] as? Int ?? 0
         )
+    }
+    
+    // MARK: - Comment Methods
+    
+    func addComment(videoId: String, text: String) async throws {
+        print("DEBUG: Starting to add comment for video: \(videoId)")
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FirestoreService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let batch = db.batch()
+        
+        // Create the comment document
+        let commentRef = db.collection("comments").document()
+        let commentData: [String: Any] = [
+            "videoId": videoId,
+            "userId": currentUserId,
+            "text": text,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        print("DEBUG: Creating comment document with ID: \(commentRef.documentID)")
+        batch.setData(commentData, forDocument: commentRef)
+        
+        // Update video's comment count
+        let videoRef = db.collection("videos").document(videoId)
+        print("DEBUG: Updating video document: \(videoId) to increment comment count")
+        batch.updateData([
+            "commentsCount": FieldValue.increment(Int64(1))
+        ], forDocument: videoRef)
+        
+        // Commit both operations
+        print("DEBUG: Committing batch write...")
+        try await batch.commit()
+        print("DEBUG: Successfully added comment and updated video count")
+    }
+    
+    func fetchComments(forVideoId videoId: String) async throws -> [CommentModel] {
+        let snapshot = try await db.collection("comments")
+            .whereField("videoId", isEqualTo: videoId)
+            .order(by: "timestamp", descending: true)
+            .getDocuments()
+        
+        var comments = snapshot.documents.compactMap { CommentModel(document: $0) }
+        
+        // Fetch user data for each comment
+        for i in 0..<comments.count {
+            if let user = try? await getUser(userId: comments[i].userId) {
+                comments[i].username = user.username
+                comments[i].profileImageUrl = user.profileImageUrl
+            }
+        }
+        
+        return comments.reversed()
+    }
+    
+    func addCommentsListener(forVideoId videoId: String, onChange: @escaping ([CommentModel]) -> Void) -> ListenerRegistration {
+        return db.collection("comments")
+            .whereField("videoId", isEqualTo: videoId)
+            .order(by: "timestamp", descending: true)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self,
+                      let documents = snapshot?.documents else {
+                    print("DEBUG: Error fetching comments: \(error?.localizedDescription ?? "")")
+                    return
+                }
+                
+                Task {
+                    let comments = documents.compactMap { CommentModel(document: $0) }
+                    let updatedComments = await withTaskGroup(of: CommentModel.self) { group in
+                        for comment in comments {
+                            group.addTask {
+                                var updatedComment = comment
+                                if let user = try? await self.getUser(userId: comment.userId) {
+                                    updatedComment.username = user.username
+                                    updatedComment.profileImageUrl = user.profileImageUrl
+                                }
+                                return updatedComment
+                            }
+                        }
+                        
+                        var result: [CommentModel] = []
+                        for await comment in group {
+                            result.append(comment)
+                        }
+                        return result
+                    }
+                    
+                    await MainActor.run {
+                        onChange(updatedComments.reversed())
+                    }
+                }
+            }
     }
     
     // MARK: - Snapshot Listeners
     
     func addUserListener(userId: String, onChange: @escaping (UserModel?) -> Void) -> ListenerRegistration {
         return db.collection("users").document(userId)
-            .addSnapshotListener { snapshot, error in
+            .addSnapshotListener(includeMetadataChanges: false) { snapshot, error in
                 guard let document = snapshot else {
                     print("DEBUG: Error fetching user: \(error?.localizedDescription ?? "")")
                     return
@@ -417,7 +513,7 @@ class FirestoreService {
     func addUserVideosListener(userId: String, onChange: @escaping ([VideoModel]) -> Void) -> ListenerRegistration {
         return db.collection("videos")
             .whereField("userId", isEqualTo: userId)
-            .addSnapshotListener { [weak self] snapshot, error in
+            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
                 guard let self = self,
                       let documents = snapshot?.documents else {
                     print("DEBUG: Error fetching videos: \(error?.localizedDescription ?? "")")
@@ -453,7 +549,8 @@ class FirestoreService {
                                     likes: data["likes"] as? Int ?? 0,
                                     comments: comments,
                                     timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                                    thumbnailUrl: data["thumbnailUrl"] as? String
+                                    thumbnailUrl: data["thumbnailUrl"] as? String,
+                                    commentsCount: data["commentsCount"] as? Int ?? 0
                                 )
                             }
                         }
@@ -486,6 +583,45 @@ class FirestoreService {
                 
                 let videoIds = documents.map { $0.documentID }
                 onChange(videoIds)
+            }
+    }
+    
+    func addVideoListener(videoId: String, onChange: @escaping (VideoModel?) -> Void) -> ListenerRegistration {
+        return db.collection("videos").document(videoId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self,
+                      let document = snapshot else {
+                    print("DEBUG: Error fetching video: \(error?.localizedDescription ?? "")")
+                    return
+                }
+                
+                guard let data = document.data() else {
+                    onChange(nil)
+                    return
+                }
+                
+                Task {
+                    // Get the user data for the video
+                    let userId = data["userId"] as? String ?? ""
+                    let username = try? await self.getUsernameForUserId(userId)
+                    
+                    let video = VideoModel(
+                        id: document.documentID,
+                        userId: userId,
+                        username: username,
+                        videoUrl: data["videoUrl"] as? String ?? "",
+                        caption: data["caption"] as? String ?? "",
+                        likes: data["likes"] as? Int ?? 0,
+                        comments: data["comments"] as? [VideoModel.Comment] ?? [],
+                        timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
+                        thumbnailUrl: data["thumbnailUrl"] as? String,
+                        commentsCount: data["commentsCount"] as? Int ?? 0
+                    )
+                    
+                    await MainActor.run {
+                        onChange(video)
+                    }
+                }
             }
     }
     

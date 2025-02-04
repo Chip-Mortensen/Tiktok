@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import FirebaseAuth
+import FirebaseFirestore
 
 // MARK: - Navigation Bar Styling
 struct NavigationBarModifier: ViewModifier {
@@ -31,6 +32,10 @@ struct VideoFeedView: View {
     @StateObject private var profileViewModel = ProfileViewModel()
     @EnvironmentObject private var appState: AppState
     @State private var currentIndex: Int = 0
+    @State private var showingComments = false
+    @State private var showingProfile = false
+    @State private var isPlaying = false
+    @State private var player: AVPlayer?
     
     var body: some View {
         NavigationView {
@@ -155,6 +160,9 @@ struct VideoContent: View {
     @State private var showingProfile = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
+    @State private var showingComments = false
+    private let firestoreService = FirestoreService.shared
+    @State private var videoListener: ListenerRegistration?
     
     var body: some View {
         ZStack {
@@ -242,17 +250,18 @@ struct VideoContent: View {
                             }
                         }
                         
-                        // Comment Button (placeholder)
+                        // Comment Button
                         Button {
-                            // TODO: Implement comments
+                            showingComments = true
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: "bubble.right")
                                     .font(.title)
-                                Text("\(video.comments.count)")
+                                    .foregroundColor(.white)
+                                Text("\(video.commentsCount)")
                                     .font(.caption)
+                                    .foregroundColor(.white)
                             }
-                            .foregroundColor(.white)
                         }
                         
                         // Share Button (placeholder)
@@ -303,9 +312,13 @@ struct VideoContent: View {
             }
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingComments) {
+            CommentsView(viewModel: CommentsViewModel(videoId: video.id))
+        }
         .onAppear {
             if isActive {
                 setupAndPlay()
+                setupVideoListener()
             }
             // Check if video is liked when view appears
             Task {
@@ -315,15 +328,18 @@ struct VideoContent: View {
         .onChange(of: isActive) { wasActive, isNowActive in
             if isNowActive {
                 setupAndPlay()
+                setupVideoListener()
             } else {
                 player?.pause()
                 isPlaying = false
+                videoListener?.remove()
             }
         }
         .onDisappear {
             player?.pause()
             player = nil
             isPlaying = false
+            videoListener?.remove()
         }
         .onChange(of: appState.isMuted) { _, isMuted in
             // Update player mute state whenever global state changes
@@ -351,6 +367,18 @@ struct VideoContent: View {
         }
         player?.play()
         isPlaying = true
+    }
+    
+    private func setupVideoListener() {
+        videoListener?.remove()
+        videoListener = firestoreService.addVideoListener(videoId: video.id) { updatedVideo in
+            if let updatedVideo = updatedVideo {
+                // Preserve the isLiked state when updating
+                let wasLiked = video.isLiked
+                video = updatedVideo
+                video.isLiked = wasLiked
+            }
+        }
     }
 }
 

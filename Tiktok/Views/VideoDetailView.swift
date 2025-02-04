@@ -17,14 +17,14 @@ struct VideoDetailView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(Color.white, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         dismiss()
                     } label: {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.white)
+                            .foregroundColor(.black)
                             .font(.title2)
                     }
                 }
@@ -43,7 +43,7 @@ struct VideoDetailView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                                 .font(.title2)
                         }
                     }
