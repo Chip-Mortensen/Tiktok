@@ -7,17 +7,29 @@ struct VideoDetailView: View {
     @EnvironmentObject private var viewModel: ProfileViewModel
     @State private var showingEditSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var selectedUserId: String? = nil
+    @State private var pushUserProfile = false
     
     var body: some View {
         NavigationView {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 
-                VideoContent(video: $video, isActive: true)
+                VideoContent(
+                    video: $video,
+                    isActive: true,
+                    selectedUserId: $selectedUserId,
+                    pushUserProfile: $pushUserProfile
+                )
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color.white, for: .navigationBar)
+            .navigationDestination(isPresented: $pushUserProfile) {
+                if let userId = selectedUserId {
+                    UserProfileView(userId: userId)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {

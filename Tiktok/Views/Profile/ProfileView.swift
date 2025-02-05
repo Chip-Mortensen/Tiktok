@@ -8,92 +8,90 @@ struct ProfileView: View {
     @State private var bio = ""
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Profile Header
-                VStack(spacing: 16) {
-                    // Profile Image
-                    if let profileImageUrl = viewModel.user?.profileImageUrl {
-                        AsyncImage(url: URL(string: profileImageUrl)) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 96, height: 96)
-                                .clipShape(Circle())
-                        } placeholder: {
-                            Circle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(width: 96, height: 96)
-                        }
-                    } else {
+        VStack(spacing: 0) {
+            // Profile Header
+            VStack(spacing: 16) {
+                // Profile Image
+                if let profileImageUrl = viewModel.user?.profileImageUrl {
+                    AsyncImage(url: URL(string: profileImageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 96, height: 96)
+                            .clipShape(Circle())
+                    } placeholder: {
                         Circle()
                             .fill(Color.gray.opacity(0.2))
                             .frame(width: 96, height: 96)
                     }
-                    
-                    // Username
-                    Text(viewModel.user?.username ?? "")
-                        .font(.headline)
-                    
-                    // Stats Row
-                    HStack(spacing: 32) {
-                        StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
-                        StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
-                        StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
-                    }
-                    
-                    // Bio
-                    if let bio = viewModel.user?.bio {
-                        Text(bio)
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 96, height: 96)
                 }
-                .padding(.vertical)
-                .padding(.horizontal)
                 
-                // Tab Bar
-                ProfileTabBar(selectedTab: $selectedTab)
+                // Username
+                Text(viewModel.user?.username ?? "")
+                    .font(.headline)
                 
-                // Tab View for Posts and Liked Posts
-                TabView(selection: $selectedTab) {
-                    PostsGridView(viewModel: viewModel)
-                        .tag(0)
-                    
-                    LikedPostsGridView(viewModel: viewModel)
-                        .tag(1)
+                // Stats Row
+                HStack(spacing: 32) {
+                    StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
+                    StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                
+                // Bio
+                if let bio = viewModel.user?.bio {
+                    Text(bio)
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button {
-                            showEditProfile = true
-                        } label: {
-                            Label("Edit Profile", systemImage: "pencil")
-                        }
-                        
-                        Button(role: .destructive) {
-                            viewModel.signOut()
-                        } label: {
-                            Label("Sign Out", systemImage: "arrow.right.circle")
-                        }
+            .padding(.vertical)
+            .padding(.horizontal)
+            
+            // Tab Bar
+            ProfileTabBar(selectedTab: $selectedTab)
+            
+            // Tab View for Posts and Liked Posts
+            TabView(selection: $selectedTab) {
+                PostsGridView(viewModel: viewModel)
+                    .tag(0)
+                
+                LikedPostsGridView(viewModel: viewModel)
+                    .tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button {
+                        showEditProfile = true
                     } label: {
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundColor(.black)
+                        Label("Edit Profile", systemImage: "pencil")
                     }
+                    
+                    Button(role: .destructive) {
+                        viewModel.signOut()
+                    } label: {
+                        Label("Sign Out", systemImage: "arrow.right.circle")
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal")
+                        .foregroundColor(.black)
                 }
             }
-            .sheet(isPresented: $showEditProfile) {
-                if let user = viewModel.user {
-                    EditProfileView(user: user) {
-                        // Refresh callback
-                        Task {
-                            await viewModel.fetchUserData()
-                        }
+        }
+        .sheet(isPresented: $showEditProfile) {
+            if let user = viewModel.user {
+                EditProfileView(user: user) {
+                    // Refresh callback
+                    Task {
+                        await viewModel.fetchUserData()
                     }
                 }
             }
@@ -295,23 +293,6 @@ struct ProfileTabBar: View {
             Rectangle()
                 .fill(Color.gray.opacity(0.2))
                 .frame(height: 1)
-        }
-    }
-}
-
-struct StatColumn: View {
-    let count: Int
-    let title: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text("\(count)")
-                .font(.subheadline)
-                .fontWeight(.bold)
-            
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.gray)
         }
     }
 }

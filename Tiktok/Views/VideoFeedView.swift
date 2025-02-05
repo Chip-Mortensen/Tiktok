@@ -33,38 +33,44 @@ struct VideoFeedView: View {
     @EnvironmentObject private var appState: AppState
     @State private var currentIndex: Int = 0
     @State private var showingComments = false
-    @State private var showingProfile = false
+    @State private var selectedUserId: String? = nil
+    @State private var pushUserProfile = false
     @State private var isPlaying = false
     @State private var player: AVPlayer?
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Base black background
-                Color.black.edgesIgnoringSafeArea(.all)
-                
-                if viewModel.videos.isEmpty {
-                    // Empty state
-                    VStack {
-                        Image(systemName: "video.slash")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray)
-                        Text("No videos yet")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                    }
-                } else if viewModel.isLoading {
-                    ProgressView()
-                } else {
-                    VideoPager(
-                        videos: $viewModel.videos,
-                        currentIndex: $currentIndex
-                    )
-                    .environmentObject(profileViewModel)
-                    .environmentObject(appState)
+        ZStack {
+            // Base black background
+            Color.black.edgesIgnoringSafeArea(.all)
+            
+            if viewModel.videos.isEmpty {
+                // Empty state
+                VStack {
+                    Image(systemName: "video.slash")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    Text("No videos yet")
+                        .font(.headline)
+                        .foregroundColor(.gray)
                 }
+            } else if viewModel.isLoading {
+                ProgressView()
+            } else {
+                VideoPager(
+                    videos: $viewModel.videos,
+                    currentIndex: $currentIndex,
+                    selectedUserId: $selectedUserId,
+                    pushUserProfile: $pushUserProfile
+                )
+                .environmentObject(profileViewModel)
+                .environmentObject(appState)
             }
-            .customNavigationBar()
+        }
+        .customNavigationBar()
+        .navigationDestination(isPresented: $pushUserProfile) {
+            if let userId = selectedUserId {
+                UserProfileView(userId: userId)
+            }
         }
         .task {
             await viewModel.fetchVideos()
@@ -79,6 +85,8 @@ struct VideoFeedView: View {
 struct VideoPager: View {
     @Binding var videos: [VideoModel]
     @Binding var currentIndex: Int
+    @Binding var selectedUserId: String?
+    @Binding var pushUserProfile: Bool
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
     @EnvironmentObject private var profileViewModel: ProfileViewModel
@@ -94,7 +102,9 @@ struct VideoPager: View {
                     ForEach(Array(videos.enumerated()), id: \.element.id) { index, _ in
                         VideoPlayerContainer(
                             video: $videos[index],
-                            isActive: currentIndex == index
+                            isActive: currentIndex == index,
+                            selectedUserId: $selectedUserId,
+                            pushUserProfile: $pushUserProfile
                         )
                         .frame(width: geometry.size.width, height: geometry.size.height)
                     }
@@ -135,16 +145,23 @@ struct VideoPager: View {
 struct VideoPlayerContainer: View {
     @Binding var video: VideoModel
     let isActive: Bool
+    @Binding var selectedUserId: String?
+    @Binding var pushUserProfile: Bool
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var appState: AppState
     
     var body: some View {
         GeometryReader { geometry in
-            VideoContent(video: $video, isActive: isActive)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
-                .environmentObject(profileViewModel)
-                .environmentObject(appState)
+            VideoContent(
+                video: $video,
+                isActive: isActive,
+                selectedUserId: $selectedUserId,
+                pushUserProfile: $pushUserProfile
+            )
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+            .environmentObject(profileViewModel)
+            .environmentObject(appState)
         }
     }
 }
@@ -153,14 +170,15 @@ struct VideoPlayerContainer: View {
 struct VideoContent: View {
     @Binding var video: VideoModel
     let isActive: Bool
+    @Binding var selectedUserId: String?
+    @Binding var pushUserProfile: Bool
     @State private var player: AVPlayer?
     @State private var isPlaying = false
     @EnvironmentObject private var viewModel: ProfileViewModel
     @EnvironmentObject private var appState: AppState
-    @State private var showingProfile = false
+    @State private var showingComments = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
-    @State private var showingComments = false
     private let firestoreService = FirestoreService.shared
     @State private var videoListener: ListenerRegistration?
     
@@ -174,7 +192,7 @@ struct VideoContent: View {
                         TapGesture()
                             .onEnded { _ in
                                 // Only handle mute toggle if not interacting with other UI elements
-                                if !showingProfile {
+                                if !pushUserProfile {
                                     appState.isMuted.toggle()
                                 }
                             }
@@ -198,17 +216,18 @@ struct VideoContent: View {
                     // Video info (left side)
                     VStack(alignment: .leading, spacing: 8) {
                         Button {
-                            print("DEBUG: Username tapped, showing profile for: \(video.username ?? "unknown")")
+                            print("DEBUG: Username tapped for: \(video.username ?? "unknown")")
                             player?.pause()
                             isPlaying = false
                             
                             if video.userId == Auth.auth().currentUser?.uid {
-                                // If it's the current user's video, switch to profile tab
+                                // It's the current user: switch tab
                                 dismiss()
-                                tabSelection.wrappedValue = 2 // Profile tab
+                                tabSelection.wrappedValue = 3  // Profile tab
                             } else {
-                                // If it's another user's video, show profile sheet
-                                showingProfile = true
+                                // For another user, set the state to push the profile view
+                                selectedUserId = video.userId
+                                pushUserProfile = true
                             }
                         } label: {
                             Text("@\(video.username ?? "user")")
@@ -282,22 +301,6 @@ struct VideoContent: View {
                     .padding()
                 }
             }
-        }
-        .onChange(of: showingProfile) { _, isShowing in
-            print("DEBUG: Profile sheet state changed - isShowing: \(isShowing)")
-            if isShowing {
-                player?.pause()
-                isPlaying = false
-            } else if isActive {
-                player?.play()
-                isPlaying = true
-            }
-        }
-        .sheet(isPresented: $showingProfile) {
-            NavigationView {
-                UserProfileView(userId: video.userId)
-            }
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingComments) {
             CommentsView(viewModel: CommentsViewModel(videoId: video.id))

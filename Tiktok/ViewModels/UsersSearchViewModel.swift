@@ -47,7 +47,7 @@ class UsersSearchViewModel: ObservableObject {
                 
                 if Task.isCancelled { return }
                 
-                var users = exactSnapshot.documents.compactMap { try? UserModel(document: $0) }
+                var users = exactSnapshot.documents.compactMap { UserModel(document: $0) }
                 
                 // If no exact matches, try prefix match
                 if users.isEmpty {
@@ -59,7 +59,7 @@ class UsersSearchViewModel: ObservableObject {
                     
                     if Task.isCancelled { return }
                     
-                    users = prefixSnapshot.documents.compactMap { try? UserModel(document: $0) }
+                    users = prefixSnapshot.documents.compactMap { UserModel(document: $0) }
                 }
                 
                 await MainActor.run {

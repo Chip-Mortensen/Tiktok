@@ -4,128 +4,76 @@ import FirebaseAuth
 struct UserProfileView: View {
     let userId: String
     @StateObject private var viewModel = UserProfileViewModel()
-    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         VStack(spacing: 0) {
-            // Navigation Bar
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(.primary)
-                        .imageScale(.large)
+            // Profile Header
+            VStack(spacing: 16) {
+                // Profile Image
+                if let profileImageUrl = viewModel.user?.profileImageUrl {
+                    AsyncImage(url: URL(string: profileImageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
+                    }
+                    .frame(width: 96, height: 96)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 96, height: 96)
                 }
                 
-                Spacer()
-                
-                Text(viewModel.user?.username ?? "Profile")
+                // Username
+                Text(viewModel.user?.username ?? "")
                     .font(.headline)
                 
-                Spacer()
+                // Stats Row
+                HStack(spacing: 32) {
+                    StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
+                    StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
+                }
                 
-                // Placeholder for symmetry
-                Image(systemName: "chevron.left")
-                    .foregroundColor(.clear)
-                    .imageScale(.large)
-            }
-            .padding()
-            
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Profile Header
-                    VStack(spacing: 12) {
-                        // Profile Image
-                        if let profileImageUrl = viewModel.user?.profileImageUrl {
-                            AsyncImage(url: URL(string: profileImageUrl)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Color.gray.opacity(0.3)
-                            }
-                            .frame(width: 96, height: 96)
-                            .clipShape(Circle())
-                        } else {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .foregroundColor(.gray)
-                                .frame(width: 96, height: 96)
+                // Bio
+                if let bio = viewModel.user?.bio {
+                    Text(bio)
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                
+                // Follow Button (only show for other users)
+                if userId != Auth.auth().currentUser?.uid {
+                    Button {
+                        Task {
+                            await viewModel.toggleFollow()
                         }
-                        
-                        // Username
-                        Text("@\(viewModel.user?.username ?? "")")
-                            .font(.title3)
+                    } label: {
+                        Text(viewModel.isFollowing ? "Following" : "Follow")
+                            .font(.subheadline)
                             .fontWeight(.semibold)
-                        
-                        // Bio
-                        if let bio = viewModel.user?.bio {
-                            Text(bio)
-                                .font(.subheadline)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
-                        
-                        // Follow Button
-                        if viewModel.user?.id != Auth.auth().currentUser?.uid {
-                            Button {
-                                Task {
-                                    await viewModel.toggleFollow()
-                                }
-                            } label: {
-                                Text(viewModel.isFollowing ? "Following" : "Follow")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(viewModel.isFollowing ? .primary : .white)
-                                    .frame(width: 160, height: 44)
-                                    .background(viewModel.isFollowing ? Color.gray.opacity(0.1) : Color.blue)
-                                    .cornerRadius(22)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 22)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: viewModel.isFollowing ? 1 : 0)
-                                    )
-                            }
-                        }
+                            .foregroundColor(viewModel.isFollowing ? .primary : .white)
+                            .frame(width: 160, height: 44)
+                            .background(viewModel.isFollowing ? Color.gray.opacity(0.1) : Color.blue)
+                            .cornerRadius(22)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: viewModel.isFollowing ? 1 : 0)
+                            )
                     }
-                    .padding(.top)
-                    
-                    // Stats Row
-                    HStack(spacing: 32) {
-                        VStack {
-                            Text("\(viewModel.user?.postsCount ?? 0)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Text("Posts")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        VStack {
-                            Text("\(viewModel.user?.followersCount ?? 0)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Text("Followers")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        VStack {
-                            Text("\(viewModel.user?.followingCount ?? 0)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Text("Following")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical)
-                    
-                    // Videos Grid
-                    UserVideosGridView(viewModel: viewModel)
                 }
             }
+            .padding(.vertical)
+            
+            // Videos Grid
+            UserVideosGridView(viewModel: viewModel)
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(viewModel.user?.username ?? "Profile")
         .task {
             await viewModel.loadUserProfile(userId: userId)
         }
@@ -139,26 +87,24 @@ struct UserVideosGridView: View {
     @State private var selectedVideo: VideoModel?
     
     var body: some View {
-        NavigationStack {
-            VideoGridView(
-                videos: .constant(viewModel.userVideos),
-                onVideoTap: { video in
-                    selectedVideo = video
-                }
-            )
-            .navigationDestination(item: $selectedVideo) { video in
-                VideoDetailView(video: Binding(
-                    get: { video },
-                    set: { newValue in
-                        // Update the video in the userVideos array
-                        if let idx = viewModel.userVideos.firstIndex(where: { $0.id == newValue.id }) {
-                            viewModel.userVideos[idx] = newValue
-                        }
-                        selectedVideo = newValue
-                    }
-                ))
-                .environmentObject(profileViewModel)
+        VideoGridView(
+            videos: .constant(viewModel.userVideos),
+            onVideoTap: { video in
+                selectedVideo = video
             }
+        )
+        .navigationDestination(item: $selectedVideo) { video in
+            VideoDetailView(video: Binding(
+                get: { video },
+                set: { newValue in
+                    // Update the video in the userVideos array
+                    if let idx = viewModel.userVideos.firstIndex(where: { $0.id == newValue.id }) {
+                        viewModel.userVideos[idx] = newValue
+                    }
+                    selectedVideo = newValue
+                }
+            ))
+            .environmentObject(profileViewModel)
         }
         .task {
             await profileViewModel.fetchUserData()

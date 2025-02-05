@@ -13,42 +13,51 @@ extension EnvironmentValues {
 
 struct MainTabView: View {
     @State private var selectedTab = 0
-    @State private var showUploadVideo = false
+    @StateObject private var appState = AppState.shared
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            VideoFeedView()
-                .tabItem {
-                    Image(systemName: "house")
-                        .environment(\.symbolVariants, selectedTab == 0 ? .fill : .none)
-                    Text("Home")
-                }
-                .tag(0)
-                .environment(\.tabSelection, $selectedTab)
+            NavigationStack {
+                VideoFeedView()
+                    .environment(\.tabSelection, $selectedTab)
+            }
+            .tabItem {
+                Image(systemName: "house")
+                Text("Home")
+            }
+            .tag(0)
             
-            UsersSearchView()
-                .tabItem {
-                    Image(systemName: "magnifyingglass")
-                        .environment(\.symbolVariants, selectedTab == 1 ? .fill : .none)
-                    Text("Search")
-                }
-                .tag(1)
+            NavigationStack {
+                UsersSearchView()
+                    .environment(\.tabSelection, $selectedTab)
+            }
+            .tabItem {
+                Image(systemName: "magnifyingglass")
+                Text("Search")
+            }
+            .tag(1)
             
-            VideoUploadView()
-                .tabItem {
-                    Image(systemName: "plus")
-                    Text("Upload")
-                }
-                .tag(2)
+            NavigationStack {
+                VideoUploadView()
+                    .environment(\.tabSelection, $selectedTab)
+            }
+            .tabItem {
+                Image(systemName: "plus")
+                Text("Upload")
+            }
+            .tag(2)
             
-            ProfileView()
-                .tabItem {
-                    Image(systemName: "person")
-                        .environment(\.symbolVariants, selectedTab == 3 ? .fill : .none)
-                    Text("Profile")
-                }
-                .tag(3)
+            NavigationStack {
+                ProfileView()
+                    .environment(\.tabSelection, $selectedTab)
+            }
+            .tabItem {
+                Image(systemName: "person")
+                Text("Profile")
+            }
+            .tag(3)
         }
+        .environmentObject(appState)
         .onAppear {
             // Set tab bar appearance
             let appearance = UITabBarAppearance()
