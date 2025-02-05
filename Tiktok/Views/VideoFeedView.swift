@@ -152,6 +152,7 @@ struct VideoPlayerContainer: View {
     @Binding var pushUserProfile: Bool
     @EnvironmentObject private var viewModel: VideoFeedViewModel
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var videoService: VideoService
     
     var body: some View {
         GeometryReader { geometry in
@@ -165,6 +166,7 @@ struct VideoPlayerContainer: View {
             .clipped()
             .environmentObject(viewModel)
             .environmentObject(appState)
+            .environmentObject(videoService)
         }
     }
 }
@@ -177,13 +179,11 @@ struct VideoContent: View {
     @Binding var pushUserProfile: Bool
     @State private var player: AVPlayer?
     @State private var isPlaying = false
-    @StateObject private var viewModel = VideoFeedViewModel()  // Create a local view model instance
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var videoService: VideoService
     @State private var showingComments = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
-    private let firestoreService = FirestoreService.shared
-    @State private var videoListener: ListenerRegistration?
     
     var body: some View {
         ZStack {
@@ -253,10 +253,9 @@ struct VideoContent: View {
                         // Like Button
                         Button {
                             Task {
-                                if video.isLiked {
-                                    await viewModel.unlikeVideo(video.id)
-                                } else {
-                                    await viewModel.likeVideo(video.id)
+                                await videoService.toggleLike(for: video.id)
+                                if let updatedVideo = videoService.videos[video.id] {
+                                    video = updatedVideo
                                 }
                             }
                         } label: {
@@ -311,28 +310,25 @@ struct VideoContent: View {
         .onAppear {
             if isActive {
                 setupAndPlay()
-                setupVideoListener()
-            }
-            // Check if video is liked when view appears
-            Task {
-                video.isLiked = await viewModel.isVideoLiked(video)
+                videoService.setupVideoListener(videoId: video.id)
+                videoService.videos[video.id] = video
             }
         }
         .onChange(of: isActive) { wasActive, isNowActive in
             if isNowActive {
                 setupAndPlay()
-                setupVideoListener()
+                videoService.setupVideoListener(videoId: video.id)
             } else {
                 player?.pause()
                 isPlaying = false
-                videoListener?.remove()
+                videoService.removeListener(videoId: video.id)
             }
         }
         .onDisappear {
             player?.pause()
             player = nil
             isPlaying = false
-            videoListener?.remove()
+            videoService.removeListener(videoId: video.id)
         }
         .onChange(of: appState.isMuted) { _, isMuted in
             // Update player mute state whenever global state changes
@@ -360,18 +356,6 @@ struct VideoContent: View {
         }
         player?.play()
         isPlaying = true
-    }
-    
-    private func setupVideoListener() {
-        videoListener?.remove()
-        videoListener = firestoreService.addVideoListener(videoId: video.id) { updatedVideo in
-            if let updatedVideo = updatedVideo {
-                // Preserve the isLiked state when updating
-                let wasLiked = video.isLiked
-                video = updatedVideo
-                video.isLiked = wasLiked
-            }
-        }
     }
 }
 

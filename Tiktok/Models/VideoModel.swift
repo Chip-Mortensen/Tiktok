@@ -69,7 +69,9 @@ struct VideoModel: Identifiable, Codable, Hashable {
     
     // Hashable conformance - use only id for equality
     static func == (lhs: VideoModel, rhs: VideoModel) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likes == rhs.likes
     }
     
     func hash(into hasher: inout Hasher) {
