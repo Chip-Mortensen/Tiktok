@@ -10,70 +10,122 @@ struct ProfileView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Profile Header
-                VStack(spacing: 16) {
-                    // Profile Image
-                    if let profileImageUrl = viewModel.user?.profileImageUrl {
-                        AsyncImage(url: URL(string: profileImageUrl)) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 96, height: 96)
-                                .clipShape(Circle())
-                        } placeholder: {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Profile Header
+                    VStack(spacing: 16) {
+                        // Profile Image
+                        if let profileImageUrl = viewModel.user?.profileImageUrl {
+                            AsyncImage(url: URL(string: profileImageUrl)) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 96, height: 96)
+                                    .clipShape(Circle())
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 96, height: 96)
+                            }
+                        } else {
                             Circle()
                                 .fill(Color.gray.opacity(0.2))
                                 .frame(width: 96, height: 96)
                         }
-                    } else {
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 96, height: 96)
-                    }
-                    
-                    // Username
-                    Text(viewModel.user?.username ?? "")
-                        .font(.headline)
-                    
-                    // Stats Row
-                    HStack(spacing: 32) {
-                        StatColumn(count: viewModel.user?.followingCount ?? 0, 
-                                 title: "Following",
-                                 action: { activeSheet = .following })
                         
-                        StatColumn(count: viewModel.user?.followersCount ?? 0, 
-                                 title: "Followers",
-                                 action: { activeSheet = .followers })
+                        // Username
+                        Text(viewModel.user?.username ?? "")
+                            .font(.headline)
                         
-                        StatColumn(count: viewModel.user?.likesCount ?? 0, 
-                                 title: "Likes",
-                                 action: { activeSheet = .likes })
+                        // Stats Row
+                        HStack(spacing: 32) {
+                            StatColumn(count: viewModel.user?.followingCount ?? 0, 
+                                     title: "Following",
+                                     action: { activeSheet = .following })
+                            
+                            StatColumn(count: viewModel.user?.followersCount ?? 0, 
+                                     title: "Followers",
+                                     action: { activeSheet = .followers })
+                            
+                            StatColumn(count: viewModel.user?.likesCount ?? 0, 
+                                     title: "Likes",
+                                     action: { activeSheet = .likes })
+                        }
+                        
+                        // Bio
+                        if let bio = viewModel.user?.bio {
+                            Text(bio)
+                                .font(.subheadline)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
                     }
+                    .padding(.vertical)
+                    .padding(.horizontal)
                     
-                    // Bio
-                    if let bio = viewModel.user?.bio {
-                        Text(bio)
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                    VStack(spacing: 0) {
+                        // Custom Tab Bar
+                        VStack(spacing: 0) {
+                            HStack(spacing: 0) {
+                                Button {
+                                    withAnimation {
+                                        selectedTab = 0
+                                    }
+                                } label: {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "grid")
+                                            .font(.title2)
+                                        Text("Posts")
+                                            .font(.caption)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .foregroundColor(selectedTab == 0 ? .black : .gray)
+                                    .padding(.vertical, 8)
+                                }
+                                
+                                Button {
+                                    withAnimation {
+                                        selectedTab = 1
+                                    }
+                                } label: {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "heart")
+                                            .font(.title2)
+                                        Text("Liked")
+                                            .font(.caption)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .foregroundColor(selectedTab == 1 ? .black : .gray)
+                                    .padding(.vertical, 8)
+                                }
+                            }
+                            
+                            ZStack(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(height: 1)
+                                
+                                Rectangle()
+                                    .fill(Color.black)
+                                    .frame(width: UIScreen.main.bounds.width / 2, height: 2)
+                                    .offset(x: selectedTab == 0 ? -UIScreen.main.bounds.width / 4 : UIScreen.main.bounds.width / 4)
+                            }
+                        }
+                        
+                        // Content
+                        ZStack {
+                            if selectedTab == 0 {
+                                PostsGridView(viewModel: viewModel)
+                                    .transition(.opacity)
+                            } else {
+                                LikedPostsGridView(viewModel: viewModel)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
                     }
+                    .frame(height: UIScreen.main.bounds.height * 0.7)
                 }
-                .padding(.vertical)
-                .padding(.horizontal)
-                
-                // Tab Bar
-                ProfileTabBar(selectedTab: $selectedTab)
-                
-                // Tab View for Posts and Liked Posts
-                TabView(selection: $selectedTab) {
-                    PostsGridView(viewModel: viewModel)
-                        .tag(0)
-                    
-                    LikedPostsGridView(viewModel: viewModel)
-                        .tag(1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -259,79 +311,39 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 }
 
-struct ProfileTabBar: View {
-    @Binding var selectedTab: Int
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            Button {
-                selectedTab = 0
-            } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "grid")
-                        .font(.title2)
-                    Text("Posts")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == 0 ? .black : .gray)
-                .padding(.vertical, 8)
-            }
-            .overlay(alignment: .bottom) {
-                if selectedTab == 0 {
-                    Rectangle()
-                        .fill(Color.black)
-                        .frame(height: 2)
-                }
-            }
-            
-            Button {
-                selectedTab = 1
-            } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "heart")
-                        .font(.title2)
-                    Text("Liked")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == 1 ? .black : .gray)
-                .padding(.vertical, 8)
-            }
-            .overlay(alignment: .bottom) {
-                if selectedTab == 1 {
-                    Rectangle()
-                        .fill(Color.black)
-                        .frame(height: 2)
-                }
-            }
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 1)
-        }
-    }
-}
-
 struct PostsGridView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @State private var selectedVideo: VideoModel?
     
     var body: some View {
         let posts = viewModel.posts
-        VideoGridView(videos: .constant(posts)) { video in
-            selectedVideo = video
-        }
-        .navigationDestination(item: $selectedVideo) { video in
-            VideoDetailView(video: Binding(
-                get: { video },
-                set: { newValue in
-                    viewModel.videoCache[newValue.id] = newValue
-                    selectedVideo = newValue
+        if posts.isEmpty {
+            Text("No posts yet")
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity, minHeight: 200)
+        } else {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1)
+            ], spacing: 1) {
+                ForEach(posts) { video in
+                    VideoThumbnailView(video: .constant(video)) {
+                        selectedVideo = video
+                    }
                 }
-            ))
-            .environmentObject(viewModel)
+            }
+            .padding(1)
+            .navigationDestination(item: $selectedVideo) { video in
+                VideoDetailView(video: Binding(
+                    get: { video },
+                    set: { newValue in
+                        viewModel.videoCache[newValue.id] = newValue
+                        selectedVideo = newValue
+                    }
+                ))
+                .environmentObject(viewModel)
+            }
         }
     }
 }
@@ -342,18 +354,33 @@ struct LikedPostsGridView: View {
     
     var body: some View {
         let likedPosts = viewModel.likedPosts
-        VideoGridView(videos: .constant(likedPosts)) { video in
-            selectedVideo = video
-        }
-        .navigationDestination(item: $selectedVideo) { video in
-            VideoDetailView(video: Binding(
-                get: { video },
-                set: { newValue in
-                    viewModel.videoCache[newValue.id] = newValue
-                    selectedVideo = newValue
+        if likedPosts.isEmpty {
+            Text("No liked posts yet")
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity, minHeight: 200)
+        } else {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1)
+            ], spacing: 1) {
+                ForEach(likedPosts) { video in
+                    VideoThumbnailView(video: .constant(video)) {
+                        selectedVideo = video
+                    }
                 }
-            ))
-            .environmentObject(viewModel)
+            }
+            .padding(1)
+            .navigationDestination(item: $selectedVideo) { video in
+                VideoDetailView(video: Binding(
+                    get: { video },
+                    set: { newValue in
+                        viewModel.videoCache[newValue.id] = newValue
+                        selectedVideo = newValue
+                    }
+                ))
+                .environmentObject(viewModel)
+            }
         }
     }
 }
