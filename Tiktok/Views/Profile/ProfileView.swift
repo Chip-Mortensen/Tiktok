@@ -9,105 +9,108 @@ struct ProfileView: View {
     @State private var activeSheet: UserListSheetType?
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Profile Header
-            VStack(spacing: 16) {
-                // Profile Image
-                if let profileImageUrl = viewModel.user?.profileImageUrl {
-                    AsyncImage(url: URL(string: profileImageUrl)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 96, height: 96)
-                            .clipShape(Circle())
-                    } placeholder: {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Profile Header
+                VStack(spacing: 16) {
+                    // Profile Image
+                    if let profileImageUrl = viewModel.user?.profileImageUrl {
+                        AsyncImage(url: URL(string: profileImageUrl)) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 96, height: 96)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 96, height: 96)
+                        }
+                    } else {
                         Circle()
                             .fill(Color.gray.opacity(0.2))
                             .frame(width: 96, height: 96)
                     }
-                } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 96, height: 96)
-                }
-                
-                // Username
-                Text(viewModel.user?.username ?? "")
-                    .font(.headline)
-                
-                // Stats Row
-                HStack(spacing: 32) {
-                    StatColumn(count: viewModel.user?.followingCount ?? 0, 
-                             title: "Following",
-                             action: { activeSheet = .following })
                     
-                    StatColumn(count: viewModel.user?.followersCount ?? 0, 
-                             title: "Followers",
-                             action: { activeSheet = .followers })
+                    // Username
+                    Text(viewModel.user?.username ?? "")
+                        .font(.headline)
                     
-                    StatColumn(count: viewModel.user?.likesCount ?? 0, 
-                             title: "Likes",
-                             action: { activeSheet = .likes })
+                    // Stats Row
+                    HStack(spacing: 32) {
+                        StatColumn(count: viewModel.user?.followingCount ?? 0, 
+                                 title: "Following",
+                                 action: { activeSheet = .following })
+                        
+                        StatColumn(count: viewModel.user?.followersCount ?? 0, 
+                                 title: "Followers",
+                                 action: { activeSheet = .followers })
+                        
+                        StatColumn(count: viewModel.user?.likesCount ?? 0, 
+                                 title: "Likes",
+                                 action: { activeSheet = .likes })
+                    }
+                    
+                    // Bio
+                    if let bio = viewModel.user?.bio {
+                        Text(bio)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
                 }
+                .padding(.vertical)
+                .padding(.horizontal)
                 
-                // Bio
-                if let bio = viewModel.user?.bio {
-                    Text(bio)
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                // Tab Bar
+                ProfileTabBar(selectedTab: $selectedTab)
+                
+                // Tab View for Posts and Liked Posts
+                TabView(selection: $selectedTab) {
+                    PostsGridView(viewModel: viewModel)
+                        .tag(0)
+                    
+                    LikedPostsGridView(viewModel: viewModel)
+                        .tag(1)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .padding(.vertical)
-            .padding(.horizontal)
-            
-            // Tab Bar
-            ProfileTabBar(selectedTab: $selectedTab)
-            
-            // Tab View for Posts and Liked Posts
-            TabView(selection: $selectedTab) {
-                PostsGridView(viewModel: viewModel)
-                    .tag(0)
-                
-                LikedPostsGridView(viewModel: viewModel)
-                    .tag(1)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        showEditProfile = true
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button {
+                            showEditProfile = true
+                        } label: {
+                            Label("Edit Profile", systemImage: "pencil")
+                        }
+                        
+                        Button(role: .destructive) {
+                            viewModel.signOut()
+                        } label: {
+                            Label("Sign Out", systemImage: "arrow.right.circle")
+                        }
                     } label: {
-                        Label("Edit Profile", systemImage: "pencil")
-                    }
-                    
-                    Button(role: .destructive) {
-                        viewModel.signOut()
-                    } label: {
-                        Label("Sign Out", systemImage: "arrow.right.circle")
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .foregroundColor(.black)
-                }
-            }
-        }
-        .sheet(item: $activeSheet) { sheetType in
-            if let userId = viewModel.user?.id {
-                UserListSheetView(sheetType: sheetType, userId: userId)
-            }
-        }
-        .sheet(isPresented: $showEditProfile) {
-            if let user = viewModel.user {
-                EditProfileView(user: user) {
-                    // Refresh callback
-                    Task {
-                        await viewModel.fetchUserData()
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundColor(.black)
                     }
                 }
+            }
+            .sheet(item: $activeSheet) { sheetType in
+                UserListSheetView(sheetType: sheetType, userId: viewModel.user?.id ?? "")
+            }
+            .sheet(isPresented: $showEditProfile) {
+                if let user = viewModel.user {
+                    EditProfileView(user: user) {
+                        // Refresh callback
+                        Task {
+                            await viewModel.fetchUserData()
+                        }
+                    }
+                }
+            }
+            .task {
+                await viewModel.fetchUserData()
             }
         }
     }
@@ -313,56 +316,44 @@ struct ProfileTabBar: View {
 
 struct PostsGridView: View {
     @ObservedObject var viewModel: ProfileViewModel
-    @State private var selectedVideoIndex: Int?
+    @State private var selectedVideo: VideoModel?
     
     var body: some View {
         let posts = viewModel.posts
         VideoGridView(videos: .constant(posts)) { video in
-            if let index = posts.firstIndex(where: { $0.id == video.id }) {
-                selectedVideoIndex = index
-            }
+            selectedVideo = video
         }
-        .sheet(item: Binding(
-            get: { selectedVideoIndex.map { Index(int: $0) } },
-            set: { selectedVideoIndex = $0?.int }
-        )) { index in
-            if let video = posts[safe: index.int] {
-                VideoDetailView(video: Binding(
-                    get: { video },
-                    set: { newValue in
-                        viewModel.videoCache[newValue.id] = newValue
-                    }
-                ))
-                .environmentObject(viewModel)
-            }
+        .navigationDestination(item: $selectedVideo) { video in
+            VideoDetailView(video: Binding(
+                get: { video },
+                set: { newValue in
+                    viewModel.videoCache[newValue.id] = newValue
+                    selectedVideo = newValue
+                }
+            ))
+            .environmentObject(viewModel)
         }
     }
 }
 
 struct LikedPostsGridView: View {
     @ObservedObject var viewModel: ProfileViewModel
-    @State private var selectedVideoIndex: Int?
+    @State private var selectedVideo: VideoModel?
     
     var body: some View {
         let likedPosts = viewModel.likedPosts
         VideoGridView(videos: .constant(likedPosts)) { video in
-            if let index = likedPosts.firstIndex(where: { $0.id == video.id }) {
-                selectedVideoIndex = index
-            }
+            selectedVideo = video
         }
-        .sheet(item: Binding(
-            get: { selectedVideoIndex.map { Index(int: $0) } },
-            set: { selectedVideoIndex = $0?.int }
-        )) { index in
-            if let video = likedPosts[safe: index.int] {
-                VideoDetailView(video: Binding(
-                    get: { video },
-                    set: { newValue in
-                        viewModel.videoCache[newValue.id] = newValue
-                    }
-                ))
-                .environmentObject(viewModel)
-            }
+        .navigationDestination(item: $selectedVideo) { video in
+            VideoDetailView(video: Binding(
+                get: { video },
+                set: { newValue in
+                    viewModel.videoCache[newValue.id] = newValue
+                    selectedVideo = newValue
+                }
+            ))
+            .environmentObject(viewModel)
         }
     }
 }
