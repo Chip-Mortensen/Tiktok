@@ -26,20 +26,28 @@ struct MainTabView: View {
                 .tag(0)
                 .environment(\.tabSelection, $selectedTab)
             
+            UsersSearchView()
+                .tabItem {
+                    Image(systemName: "magnifyingglass")
+                        .environment(\.symbolVariants, selectedTab == 1 ? .fill : .none)
+                    Text("Search")
+                }
+                .tag(1)
+            
             VideoUploadView()
                 .tabItem {
                     Image(systemName: "plus")
                     Text("Upload")
                 }
-                .tag(1)
+                .tag(2)
             
             ProfileView()
                 .tabItem {
                     Image(systemName: "person")
-                        .environment(\.symbolVariants, selectedTab == 2 ? .fill : .none)
+                        .environment(\.symbolVariants, selectedTab == 3 ? .fill : .none)
                     Text("Profile")
                 }
-                .tag(2)
+                .tag(3)
         }
         .onAppear {
             // Set tab bar appearance
