@@ -325,6 +325,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 struct PostsGridView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @State private var selectedVideo: VideoModel?
+    @EnvironmentObject private var bookmarkService: BookmarkService
     
     var body: some View {
         let posts = viewModel.posts
@@ -354,6 +355,7 @@ struct PostsGridView: View {
                     }
                 ))
                 .environmentObject(viewModel)
+                .environmentObject(bookmarkService)
             }
         }
     }
@@ -362,6 +364,7 @@ struct PostsGridView: View {
 struct LikedPostsGridView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @State private var selectedVideo: VideoModel?
+    @EnvironmentObject private var bookmarkService: BookmarkService
     
     var body: some View {
         let likedPosts = viewModel.likedPosts
@@ -391,6 +394,7 @@ struct LikedPostsGridView: View {
                     }
                 ))
                 .environmentObject(viewModel)
+                .environmentObject(bookmarkService)
             }
         }
     }
