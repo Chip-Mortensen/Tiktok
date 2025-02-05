@@ -126,7 +126,6 @@ struct ProfileView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .frame(height: UIScreen.main.bounds.height * 0.7)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
