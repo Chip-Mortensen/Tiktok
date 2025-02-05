@@ -43,24 +43,30 @@ class VideoService: ObservableObject {
             guard let self = self else { return }
             Task {
                 if let updatedVideo = updatedVideo {
+                    // Create a mutable copy of the updated video
+                    var newVideo = updatedVideo
+                    
                     // If we have an optimistic update pending, use those values
                     if let optimisticUpdate = self.optimisticUpdates[videoId] {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                            var newVideo = updatedVideo
-                            newVideo.isLiked = optimisticUpdate.isLiked
-                            newVideo.likes = optimisticUpdate.likes
-                            self.videos[videoId] = newVideo
-                        }
+                        newVideo.isLiked = optimisticUpdate.isLiked
+                        newVideo.likes = optimisticUpdate.likes
                     } else {
                         // No optimistic update, fetch real state
                         let isLiked = try? await self.firestoreService.isVideoLikedByUser(
                             videoId: videoId,
                             userId: Auth.auth().currentUser?.uid ?? ""
                         )
-                        
+                        newVideo.isLiked = isLiked ?? false
+                    }
+                    
+                    // If we already have this video in our state, preserve any local state
+                    if let existingVideo = self.videos[videoId] {
+                        newVideo.isBookmarked = existingVideo.isBookmarked
+                    }
+                    
+                    // Update the video in our state with animation
+                    await MainActor.run {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                            var newVideo = updatedVideo
-                            newVideo.isLiked = isLiked ?? false
                             self.videos[videoId] = newVideo
                         }
                     }

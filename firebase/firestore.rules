@@ -90,10 +90,11 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         request.auth.uid == resource.data.userId ||  // Video owner can update
         (
-          // Allow updating only likes count from other users
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
-          // Ensure the increment is only +1 or -1
-          math.abs(request.resource.data.likes - resource.data.likes) <= 1
+          // Allow updating only likes and commentsCount from other users
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentsCount']) &&
+          // Ensure the increment is only +1 or -1 for both fields
+          math.abs(request.resource.data.likes - resource.data.likes) <= 1 &&
+          math.abs(request.resource.data.commentsCount - resource.data.commentsCount) <= 1
         )
       );
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;

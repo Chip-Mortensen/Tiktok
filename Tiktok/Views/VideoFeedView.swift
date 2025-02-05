@@ -280,9 +280,7 @@ struct VideoContent: View {
                                 Image(systemName: "bubble.right")
                                     .font(.title)
                                     .foregroundColor(.white)
-                                Text("\(video.commentsCount)")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
+                                CommentsCountBadgeView(videoId: video.id)
                             }
                         }
                         
@@ -340,8 +338,15 @@ struct VideoContent: View {
             videoService.removeListener(videoId: video.id)
         }
         .onChange(of: appState.isMuted) { _, isMuted in
-            // Update player mute state whenever global state changes
             player?.isMuted = isMuted
+        }
+        // Add observer for video updates
+        .onChange(of: videoService.videos[video.id]) { _, updatedVideo in
+            if let updatedVideo = updatedVideo {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    video = updatedVideo
+                }
+            }
         }
     }
     

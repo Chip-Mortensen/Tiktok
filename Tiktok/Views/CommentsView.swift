@@ -74,11 +74,38 @@ struct CommentsView: View {
                 Text(errorMessage)
             }
         }
+        .onAppear {
+            viewModel.setupCommentsListener()
+        }
+        .onDisappear {
+            viewModel.removeListener()
+        }
     }
 }
 
 struct CommentCell: View {
     let comment: CommentModel
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        let now = Date()
+        let diff = Int(now.timeIntervalSince(date))
+        
+        // Convert to minutes
+        let minutes = diff / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+        
+        // Convert to hours
+        let hours = minutes / 60
+        if hours < 24 {
+            return "\(hours)h"
+        }
+        
+        // Convert to days
+        let days = hours / 24
+        return "\(days)d"
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -112,7 +139,7 @@ struct CommentCell: View {
                     Text("·")
                         .foregroundColor(.gray)
                     
-                    Text(comment.timestamp, style: .relative)
+                    Text(formatTimestamp(comment.timestamp))
                         .font(.caption)
                         .foregroundColor(.gray)
                 }

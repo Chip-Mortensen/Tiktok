@@ -493,7 +493,7 @@ class FirestoreService {
             }
         }
         
-        return comments.reversed()
+        return comments
     }
     
     func addCommentsListener(forVideoId videoId: String, onChange: @escaping ([CommentModel]) -> Void) -> ListenerRegistration {
@@ -508,28 +508,36 @@ class FirestoreService {
                 }
                 
                 Task {
-                    let comments = documents.compactMap { CommentModel(document: $0) }
-                    let updatedComments = await withTaskGroup(of: CommentModel.self) { group in
-                        for comment in comments {
+                    // Create immutable comments array from documents
+                    let initialComments = documents.compactMap { CommentModel(document: $0) }
+                    
+                    // Create new array with user data
+                    let updatedComments = await withTaskGroup(of: (Int, CommentModel).self) { group in
+                        for (index, comment) in initialComments.enumerated() {
                             group.addTask {
                                 var updatedComment = comment
                                 if let user = try? await self.getUser(userId: comment.userId) {
                                     updatedComment.username = user.username
                                     updatedComment.profileImageUrl = user.profileImageUrl
                                 }
-                                return updatedComment
+                                return (index, updatedComment)
                             }
                         }
                         
-                        var result: [CommentModel] = []
-                        for await comment in group {
-                            result.append(comment)
+                        // Collect results maintaining order
+                        var orderedComments: [CommentModel] = []
+                        var indexedComments: [(Int, CommentModel)] = []
+                        for await result in group {
+                            indexedComments.append(result)
                         }
-                        return result
+                        
+                        // Sort by original index and extract comments
+                        orderedComments = indexedComments.sorted { $0.0 < $1.0 }.map { $0.1 }
+                        return orderedComments
                     }
                     
                     await MainActor.run {
-                        onChange(updatedComments.reversed())
+                        onChange(updatedComments)
                     }
                 }
             }
