@@ -264,19 +264,6 @@ struct VideoContent: View {
                             }
                         }
                         
-                        // Share Button (placeholder)
-                        Button {
-                            // TODO: Implement share
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.right")
-                                    .font(.title)
-                                Text("Share")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.white)
-                        }
-                        
                         // Bookmark Button (placeholder)
                         Button {
                             // TODO: Implement bookmarks
