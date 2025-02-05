@@ -62,6 +62,7 @@ struct VideoFeedView: View {
                     selectedUserId: $selectedUserId,
                     pushUserProfile: $pushUserProfile
                 )
+                .environmentObject(viewModel)
                 .environmentObject(profileViewModel)
                 .environmentObject(appState)
             }
@@ -147,7 +148,7 @@ struct VideoPlayerContainer: View {
     let isActive: Bool
     @Binding var selectedUserId: String?
     @Binding var pushUserProfile: Bool
-    @EnvironmentObject private var profileViewModel: ProfileViewModel
+    @EnvironmentObject private var viewModel: VideoFeedViewModel
     @EnvironmentObject private var appState: AppState
     
     var body: some View {
@@ -160,7 +161,7 @@ struct VideoPlayerContainer: View {
             )
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
-            .environmentObject(profileViewModel)
+            .environmentObject(viewModel)
             .environmentObject(appState)
         }
     }
@@ -174,7 +175,7 @@ struct VideoContent: View {
     @Binding var pushUserProfile: Bool
     @State private var player: AVPlayer?
     @State private var isPlaying = false
-    @EnvironmentObject private var viewModel: ProfileViewModel
+    @EnvironmentObject private var viewModel: VideoFeedViewModel
     @EnvironmentObject private var appState: AppState
     @State private var showingComments = false
     @Environment(\.dismiss) private var dismiss
@@ -252,10 +253,8 @@ struct VideoContent: View {
                             Task {
                                 if video.isLiked {
                                     await viewModel.unlikeVideo(video.id)
-                                    video.unlike()
                                 } else {
                                     await viewModel.likeVideo(video.id)
-                                    video.like()
                                 }
                             }
                         } label: {
@@ -263,6 +262,8 @@ struct VideoContent: View {
                                 Image(systemName: video.isLiked ? "heart.fill" : "heart")
                                     .font(.title)
                                     .foregroundColor(video.isLiked ? .red : .white)
+                                    .scaleEffect(video.isLiked ? 1.2 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isLiked)
                                 Text("\(video.likes)")
                                     .font(.caption)
                                     .foregroundColor(.white)

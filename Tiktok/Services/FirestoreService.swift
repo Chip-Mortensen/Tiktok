@@ -325,38 +325,64 @@ class FirestoreService {
         return videos.sorted { $0.timestamp > $1.timestamp }
     }
     
-    func likeVideo(videoId: String, userId: String) async throws {
+    func likeVideo(videoId: String, likerUserId: String, videoOwnerId: String) async throws {
         let batch = db.batch()
         
-        // Add to user's liked videos
+        // Store the like document in the liker's subcollection
         let likeRef = db.collection("userLikes")
-            .document(userId)
+            .document(likerUserId)
             .collection("likedVideos")
             .document(videoId)
         
-        batch.setData(["timestamp": FieldValue.serverTimestamp()], forDocument: likeRef)
+        // Check if the like already exists
+        let likeDoc = try await likeRef.getDocument()
+        if likeDoc.exists {
+            // Like already exists, don't proceed
+            return
+        }
+        
+        batch.setData([
+            "videoId": videoId,
+            "userId": likerUserId,
+            "timestamp": FieldValue.serverTimestamp()
+        ], forDocument: likeRef)
         
         // Increment video likes count
         let videoRef = db.collection("videos").document(videoId)
         batch.updateData(["likes": FieldValue.increment(Int64(1))], forDocument: videoRef)
         
+        // Increment the video owner's likesCount field in their user document
+        let ownerRef = db.collection("users").document(videoOwnerId)
+        batch.updateData(["likesCount": FieldValue.increment(Int64(1))], forDocument: ownerRef)
+        
         try await batch.commit()
     }
     
-    func unlikeVideo(videoId: String, userId: String) async throws {
+    func unlikeVideo(videoId: String, likerUserId: String, videoOwnerId: String) async throws {
         let batch = db.batch()
         
-        // Remove from user's liked videos
+        // Remove the like document
         let likeRef = db.collection("userLikes")
-            .document(userId)
+            .document(likerUserId)
             .collection("likedVideos")
             .document(videoId)
+        
+        // Check if the like exists before trying to remove it
+        let likeDoc = try await likeRef.getDocument()
+        if !likeDoc.exists {
+            // Like doesn't exist, don't proceed
+            return
+        }
         
         batch.deleteDocument(likeRef)
         
         // Decrement video likes count
         let videoRef = db.collection("videos").document(videoId)
         batch.updateData(["likes": FieldValue.increment(Int64(-1))], forDocument: videoRef)
+        
+        // Decrement the video owner's likesCount field
+        let ownerRef = db.collection("users").document(videoOwnerId)
+        batch.updateData(["likesCount": FieldValue.increment(Int64(-1))], forDocument: ownerRef)
         
         try await batch.commit()
     }
@@ -766,5 +792,56 @@ class FirestoreService {
             }
         }
         return following
+    }
+    
+    // MARK: - User Like Methods
+    
+    func getUsersWhoLikedContent(forUserId userId: String) async throws -> [LikeModel] {
+        print("DEBUG: Fetching likes for content of user: \(userId)")
+        
+        // Get all videos by the user
+        let videosQuery = db.collection("videos")
+            .whereField("userId", isEqualTo: userId)
+        
+        let videosSnapshot = try await videosQuery.getDocuments()
+        print("DEBUG: Found \(videosSnapshot.documents.count) videos")
+        
+        var likes: [LikeModel] = []
+        
+        // For each video, query the userLikes collection for users who liked it
+        for videoDoc in videosSnapshot.documents {
+            let videoId = videoDoc.documentID
+            print("DEBUG: Processing video: \(videoId)")
+            
+            // Query all likedVideos collections for documents with this videoId
+            let likesQuery = db.collectionGroup("likedVideos")
+                .whereField("videoId", isEqualTo: videoId)
+            
+            let likesSnapshot = try await likesQuery.getDocuments()
+            print("DEBUG: Found \(likesSnapshot.documents.count) likes for video \(videoId)")
+            
+            // Process each like document
+            for likeDoc in likesSnapshot.documents {
+                if var like = LikeModel(document: likeDoc) {
+                    // Skip if this is a self-like
+                    if like.userId == userId {
+                        continue
+                    }
+                    
+                    // Fetch user details for the liker
+                    if let user = try? await getUser(userId: like.userId) {
+                        like.username = user.username
+                        like.profileImageUrl = user.profileImageUrl
+                        likes.append(like)
+                        print("DEBUG: Added like from user: \(user.username)")
+                    }
+                }
+            }
+        }
+        
+        // Sort likes by timestamp, most recent first
+        let sortedLikes = likes.sorted { $0.timestamp > $1.timestamp }
+        print("DEBUG: Returning \(sortedLikes.count) sorted likes")
+        return sortedLikes
     }
 } 

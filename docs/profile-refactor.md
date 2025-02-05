@@ -1,226 +1,249 @@
-Below is a complete implementation plan to change profile navigation for users other than yourself. Instead of showing the profile as a popup sheet, profiles will now always appear as standard full-page views within the app’s navigation stack. A back button in the navigation bar lets users return to wherever they came from.
+Below is a detailed implementation plan to convert the “followers,” “following,” and (for your own profile only) “likes” stats into tappable controls that open a popup sheet showing a list of users (each with a profile image):
 
 ---
 
-## 1. Plan Overview
+## 1. Overview
 
-- **Full-Page Navigation:**  
-  When a user taps on a profile (for example, from a video feed or a search result) and that profile does not belong to the current user, push a full-page profile view onto the navigation stack instead of presenting a modal sheet.
-
-- **Conditional Navigation:**
-
-  - **Current User:** If the profile belongs to the current user, remain on the profile tab (or switch to it).
-  - **Other Users:** If the profile belongs to another user, push a full-page view (using a `NavigationLink` or `navigationDestination`) that includes a standard back button.
-
-- **Global Navigation Consistency:**  
-  Wrap the relevant views inside a `NavigationStack` (or `NavigationView` if you are supporting older SwiftUI versions) so that navigation works as expected.
+When the user taps on either the “Followers” or “Following” count (on any profile) the app should present a popup sheet (using SwiftUI’s `.sheet`) that shows a list of users along with their profile pictures. In addition, if the profile belongs to the current user, the “Likes” stat becomes tappable and shows an analogous sheet. (For privacy reasons, only the owner’s “likes” sheet may be presented.)
 
 ---
 
-## 2. Update the Users Search Flow
+## 2. Adding Tap Actions to the Stat Views
 
-### a. Modify the Search View
+### a. Define a Sheet Type Enumeration
 
-Instead of showing a profile popup using a sheet, update your search view to use `NavigationLink` in a list. This allows tapping a user row to push the full-page profile view.
+Create an enumeration that represents which list should be shown. For example:
 
-_For example, in `Tiktok/Views/UsersSearchView.swift`:_
+```swift
+enum UserListSheetType {
+    case followers, following, likes
+}
+```
 
-```swift: Tiktok/Views/UsersSearchView.swift
-struct UsersSearchView: View {
-    @StateObject private var viewModel = UsersSearchViewModel()
+### b. Update the Profile Header
+
+In your profile view (e.g. in `ProfileView.swift` for the logged‐in user and/or in `UserProfileView.swift` for other users) locate the stat row. For instance, you might have three `StatColumn` views for “Following”, “Followers”, and “Likes.” Wrap each stat element in an interactive element (a Button or attach an `onTapGesture`) so that tapping them sets a state variable indicating the sheet type and shows the sheet.
+
+Example in `ProfileView`:
+
+```swift
+struct ProfileView: View {
+    @StateObject private var viewModel = ProfileViewModel()
+    @State private var isSheetShowing = false
+    @State private var sheetType: UserListSheetType = .followers
 
     var body: some View {
-        NavigationStack {
-            VStack {
-                TextField("Search by username", text: $viewModel.searchQuery)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
-                    .onChange(of: viewModel.searchQuery) { newValue in
-                        viewModel.performSearch()
+        VStack {
+            // ... your profile header code ...
+
+            HStack(spacing: 32) {
+                // Following stat – always tappable for any profile
+                StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
+                    .onTapGesture {
+                        sheetType = .following
+                        isSheetShowing = true
                     }
 
-                if viewModel.isLoading {
-                    ProgressView("Searching...")
-                } else {
-                    List(viewModel.searchResults, id: \.id) { user in
-                        // Use NavigationLink to push the profile view as a full page.
-                        NavigationLink(destination: UserProfileView(userId: user.id ?? "")) {
-                            UserRowView(user: user)
+                // Followers stat – always tappable
+                StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
+                    .onTapGesture {
+                        sheetType = .followers
+                        isSheetShowing = true
+                    }
+
+                // Likes stat – only if the user is viewing their own profile
+                if viewModel.user?.id == Auth.auth().currentUser?.uid {
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
+                        .onTapGesture {
+                            sheetType = .likes
+                            isSheetShowing = true
                         }
-                    }
-                    .listStyle(PlainListStyle())
+                } else {
+                    // If viewing someone else’s profile, you might opt not to make the likes stat tappable,
+                    // or even hide it from that context.
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
                 }
             }
-            .navigationTitle("Find Users")
+        }
+        .sheet(isPresented: $isSheetShowing) {
+            UserListSheetView(sheetType: sheetType, userId: viewModel.user?.id)
         }
     }
 }
 ```
 
-### b. Update the User Row Component (Optional)
-
-If not already done, create or update a reusable view component for a single user row (e.g., `UserRowView`). This view simply shows basic user details like the username and profile image.
-
-```swift: Tiktok/Views/Components/UserRowView.swift
-struct UserRowView: View {
-    let user: UserModel
-
-    var body: some View {
-        HStack {
-            if let profileImageUrl = user.profileImageUrl, let url = URL(string: profileImageUrl) {
-                AsyncImage(url: url) { image in
-                    image.resizable()
-                } placeholder: {
-                    Circle().fill(Color.gray.opacity(0.3))
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 50, height: 50)
-            }
-
-            Text("@\(user.username)")
-                .foregroundColor(.primary)
-                .font(.headline)
-
-            Spacer()
-        }
-        .padding(.vertical, 8)
-    }
-}
-```
+_Note:_ You might need to have a similar logic in `UserProfileView` if you want the other user’s follower and following stats to also be tappable.
 
 ---
 
-## 3. Update the Video Feed Flow
+## 3. Creating the Popup Sheet View
 
-In the video feed view, a tap on the username should now check if the profile belongs to the current user. If not, use navigation to push a full-page profile view.
+Create a new reusable view (for example, `UserListSheetView`) that displays a list of users along with their profile picture. This view will be driven by which type of list is requested (followers, following, or likes). You can use a `NavigationView` so that the sheet has a navigation title and a “Done” button to dismiss.
 
-### a. Modify the Tap Handler in the Video Feed
+### a. Defining the New Sheet View
 
-In `Tiktok/Views/VideoFeedView.swift`, refactor the username button action. Instead of setting a flag for showing a profile sheet, you will trigger navigation:
-
-```swift: Tiktok/Views/VideoFeedView.swift
-// Inside the HStack for video info, replace the current button action:
-Button {
-    print("DEBUG: Username tapped, showing profile for: \(video.username ?? "unknown")")
-    player?.pause()
-    isPlaying = false
-
-    if video.userId == Auth.auth().currentUser?.uid {
-        // If it's the current user's video, switch to profile tab
-        dismiss()
-        tabSelection.wrappedValue = 2 // Profile tab
-    } else {
-        // Instead of showing a modal sheet now, navigate to the profile page.
-        // You can set a navigation link active state here or call a coordinator.
-        // For example, if you have a NavigationStack higher up:
-        NavigationUtil.navigate(to: UserProfileView(userId: video.userId ?? ""))
-    }
-} label: {
-    Text("@\(video.username ?? "user")")
-        .font(.headline)
-        .foregroundColor(.white)
-}
-```
-
-> **Note:**  
-> The above code snippet uses a hypothetical `NavigationUtil.navigate(to:)` helper. One possible approach is to introduce a navigation coordinator or use a dedicated navigation link that activates when a state variable is updated. Alternatively, if the entire view is embedded in a `NavigationStack`, you can use `navigationDestination` with state-binding.
-
-### b. Implement a Navigation Helper (Optional)
-
-For cleaner code, you may create a helper utility for triggering full-page navigation without a popup. For example:
-
-```swift: Tiktok/Utils/NavigationUtil.swift
+```swift
 import SwiftUI
 
-struct NavigationUtil {
-    static func navigate<Destination: View>(to view: Destination) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = windowScene.windows.first?.rootViewController else {
-            return
+struct UserListSheetView: View {
+    let sheetType: UserListSheetType
+    // The userId parameter determines whose list to fetch.
+    // For "likes" this should be the current user’s id.
+    let userId: String?
+
+    // Local state for the fetched users
+    @State private var users: [UserModel] = []
+    @State private var isLoading = false
+    @Environment(\.dismiss) private var dismiss
+
+    var title: String {
+        switch sheetType {
+        case .followers:
+            return "Followers"
+        case .following:
+            return "Following"
+        case .likes:
+            return "Likes"
         }
-
-        let hostingController = UIHostingController(rootView: view)
-        root.show(hostingController, sender: nil)
     }
-}
-```
-
-> **Tip:**  
-> Depending on your app’s navigation structure, you might have a dedicated coordinator or simply wrap the parent view with `NavigationStack` and conditionally present `NavigationLink` destinations.
-
----
-
-## 4. General Navigation Structure
-
-Ensure that the views where the profile is pushed (e.g., search results or video feed) are embedded in a `NavigationStack` (or `NavigationView`). This guarantees that the profile view shows a standard navigation bar with a back button.
-
-For example, in your main tab view, each tab could be wrapped with its own `NavigationStack`:
-
-```swift: Tiktok/Views/MainTabView.swift
-struct MainTabView: View {
-    @State private var selectedTab = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                VideoFeedView()
-                    .environment(\.tabSelection, $selectedTab)
-            }
-            .tabItem {
-                Image(systemName: "house")
-                Text("Home")
-            }
-            .tag(0)
+        NavigationView {
+            Group {
+                if isLoading {
+                    ProgressView("Loading \(title)...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if users.isEmpty {
+                    Text("No \(title.lowercased()) found.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(users) { user in
+                        HStack(spacing: 12) {
+                            if let profileImageUrl = user.profileImageUrl, let url = URL(string: profileImageUrl) {
+                                AsyncImage(url: url) { image in
+                                    image.resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    Circle().fill(Color.gray.opacity(0.3))
+                                }
+                                .frame(width: 50, height: 50)
+                                .clipShape(Circle())
+                            } else {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 50, height: 50)
+                            }
 
-            NavigationStack {
-                UsersSearchView()
+                            Text("@\(user.username)")
+                                .font(.headline)
+                        }
+                    }
+                }
             }
-            .tabItem {
-                Image(systemName: "magnifyingglass")
-                Text("Search")
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
             }
-            .tag(1)
+            .onAppear {
+                fetchUserList()
+            }
+        }
+    }
 
-            // For current user, use the profile tab
-            NavigationStack {
-                ProfileView()
+    func fetchUserList() {
+        guard let userId = userId else { return }
+        isLoading = true
+
+        // Based on the sheet type, call the corresponding FirestoreService method:
+        // (These methods are assumed to exist or you may need to implement them accordingly.)
+        Task {
+            do {
+                switch sheetType {
+                case .followers:
+                    // Get list of followers
+                    users = try await FirestoreService.shared.getFollowers(forUserId: userId)
+                case .following:
+                    // Get list of following users
+                    users = try await FirestoreService.shared.getFollowing(forUserId: userId)
+                case .likes:
+                    // For likes: This may require a new Firestore query to fetch the list
+                    // of users who have liked the current user’s content. This feature might need backend support.
+                    users = try await FirestoreService.shared.getUsersWhoLikedContent(forUserId: userId)
+                }
+            } catch {
+                print("Error fetching \(title) list: \(error.localizedDescription)")
             }
-            .tabItem {
-                Image(systemName: "person")
-                Text("Profile")
-            }
-            .tag(2)
+            isLoading = false
         }
     }
 }
 ```
 
----
+**Notes:**
 
-## 5. Testing and Verification
-
-- **Navigation Flow:**  
-  Test that tapping on another user's profile opens a full-page view with a back button in the navigation bar.
-- **Back Navigation:**  
-  Verify that the back button correctly returns the user to the previous view (e.g., search results or video feed).
-- **Conditional Logic:**  
-  Ensure that tapping on your own username still switches to the profile tab and does not push a duplicate profile view.
-- **Overall UX:**  
-  Verify that the profile page looks consistent (full page) and that the user experience is intuitive.
+- The view above assumes that you have (or will create) corresponding methods in your Firestore service layer. Currently you already have `getFollowers(forUserId:)` and `getFollowing(forUserId:)`. For likes, you may need a new method (for example, `getUsersWhoLikedContent(forUserId:)`) that aggregates which users have “liked” your posts.
+- If you prefer a “pull-to-refresh” functionality inside the sheet, you can wrap the list in a `List` with a `.refreshable` modifier.
 
 ---
 
-## 6. Cleanup
+## 4. Firestore Service Adjustments
 
-- **Remove Popup Code:**  
-  Go through your codebase and remove any references to presenting the `UserProfileView` as a sheet for non-current users.
-- **Refactor and Comment:**  
-  Ensure that your conditional navigation logic (for current versus other users) is clearly commented for maintainability.
+### a. Verify or Implement Methods
+
+Make sure that your Firestore service (for example, in `FirestoreService.swift`) has methods to fetch:
+
+- Followers: `func getFollowers(forUserId: String) async throws -> [UserModel]`
+- Following: `func getFollowing(forUserId: String) async throws -> [UserModel]`
+- Likes: If it does not exist, implement a similar function:
+
+  For example, if your backend stores likes in a collection (perhaps under a “userLikes” document or within each video’s subcollection), then add:
+
+  ```swift
+  func getUsersWhoLikedContent(forUserId userId: String) async throws -> [UserModel] {
+      // Example implementation:
+      // 1. Query your 'likes' collection or aggregate data from each post.
+      // 2. Map the resulting liker IDs into UserModel objects using a method such as `getUser(withId:)`.
+      // This may require additional backend design.
+  }
+  ```
+
+- Adjust security rules as needed to allow read access only to the appropriate users (remember: only the current user should be allowed to see their own likes list).
 
 ---
 
-By following this plan, you will change your app’s behavior so that all profiles (except your own) are viewed as full-page screens with standard navigation, eliminating the modal popup design. Happy coding!
+## 5. Testing and Edge Cases
+
+- **Testing the Sheets:**  
+  • Tap on the “Followers” and “Following” stats on both other users’ profiles and your own profile.  
+  • Verify that the popup sheet displays a list of users (including the profile image and username).  
+  • For the “Likes” stat, ensure that it only appears as a tappable element on your own profile.
+- **Loading and Error States:**  
+  • Show a loading indicator (using a `ProgressView`) while fetching data.  
+  • Handle an empty list gracefully by displaying an appropriate message.
+- **Navigation and Dismissal:**  
+  • Include a “Done” or “Close” button in the sheet’s navigation bar to dismiss the sheet cleanly.
+
+---
+
+## 6. Code Review and Cleanup
+
+- **Refactor Common Code:** Consider extracting common UI elements (e.g., a generic user row view) so that the new sheet can reuse your existing `UserRowView` or similar assets.
+- **Comments:** Add clear comments explaining your conditional logic (especially why the “Likes” sheet appears only on your own profile).
+- **Remove Legacy Code:** Once the old modal approaches (if any) are no longer needed, clean up the codebase.
+
+---
+
+## 7. Summary
+
+With these changes you will convert your profile header’s stat counts into interactive elements that present a full-screen or modal popup sheet listing the relevant users. You’ll be:
+
+- Capturing tap events on the “Followers,” “Following,” and (conditionally) “Likes” stats.
+- Presenting a dedicated sheet view that loads the corresponding list via your Firestore service.
+- Ensuring that privacy is maintained by restricting the “Likes” list to only the current user’s view.
+
+Happy coding!

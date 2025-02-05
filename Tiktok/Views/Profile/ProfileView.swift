@@ -6,6 +6,7 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showSettings = false
     @State private var bio = ""
+    @State private var activeSheet: UserListSheetType?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -36,9 +37,17 @@ struct ProfileView: View {
                 
                 // Stats Row
                 HStack(spacing: 32) {
-                    StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
-                    StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
-                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
+                    StatColumn(count: viewModel.user?.followingCount ?? 0, 
+                             title: "Following",
+                             action: { activeSheet = .following })
+                    
+                    StatColumn(count: viewModel.user?.followersCount ?? 0, 
+                             title: "Followers",
+                             action: { activeSheet = .followers })
+                    
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, 
+                             title: "Likes",
+                             action: { activeSheet = .likes })
                 }
                 
                 // Bio
@@ -84,6 +93,11 @@ struct ProfileView: View {
                     Image(systemName: "line.3.horizontal")
                         .foregroundColor(.black)
                 }
+            }
+        }
+        .sheet(item: $activeSheet) { sheetType in
+            if let userId = viewModel.user?.id {
+                UserListSheetView(sheetType: sheetType, userId: userId)
             }
         }
         .sheet(isPresented: $showEditProfile) {

@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
+import SwiftUI
 
 @MainActor
 final class ProfileViewModel: ObservableObject {
@@ -89,19 +90,27 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func likeVideo(_ videoId: String) async {
-        guard let userId = user?.id else { return }
+        guard let currentUserId = user?.id else { return }
+        guard var video = videoCache[videoId] else { return }
         
-        // Optimistic update
-        if var video = videoCache[videoId] {
+        // Prevent duplicate liking
+        if video.isLiked { return }
+        
+        // Optimistic update with animation
+        withAnimation {
             video.like()
             videoCache[videoId] = video
         }
         
         do {
-            try await firestoreService.likeVideo(videoId: videoId, userId: userId)
+            try await firestoreService.likeVideo(
+                videoId: videoId,
+                likerUserId: currentUserId,
+                videoOwnerId: video.userId
+            )
         } catch {
-            // Revert on failure
-            if var video = videoCache[videoId] {
+            // Revert the optimistic update on failure
+            withAnimation {
                 video.unlike()
                 videoCache[videoId] = video
             }
@@ -110,19 +119,27 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func unlikeVideo(_ videoId: String) async {
-        guard let userId = user?.id else { return }
+        guard let currentUserId = user?.id else { return }
+        guard var video = videoCache[videoId] else { return }
         
-        // Optimistic update
-        if var video = videoCache[videoId] {
+        // Prevent unliking when it's already not liked
+        if !video.isLiked { return }
+        
+        // Optimistic update with animation
+        withAnimation {
             video.unlike()
             videoCache[videoId] = video
         }
         
         do {
-            try await firestoreService.unlikeVideo(videoId: videoId, userId: userId)
+            try await firestoreService.unlikeVideo(
+                videoId: videoId,
+                likerUserId: currentUserId,
+                videoOwnerId: video.userId
+            )
         } catch {
-            // Revert on failure
-            if var video = videoCache[videoId] {
+            // Revert the optimistic update on failure
+            withAnimation {
                 video.like()
                 videoCache[videoId] = video
             }

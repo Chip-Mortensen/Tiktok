@@ -8,12 +8,14 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         request.auth.uid == userId ||  // User can update their own profile
         (
-          // Allow updating only follower/following counts from other users
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount']) &&
+          // Allow updating only follower/following/likes counts from other users
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['followersCount', 'followingCount', 'likesCount']) &&
           // Ensure the increment is only +1 or -1
           (
             math.abs(request.resource.data.followersCount - resource.data.followersCount) <= 1 ||
-            math.abs(request.resource.data.followingCount - resource.data.followingCount) <= 1
+            math.abs(request.resource.data.followingCount - resource.data.followingCount) <= 1 ||
+            math.abs(request.resource.data.likesCount - resource.data.likesCount) <= 1
           )
         )
       );
@@ -47,10 +49,14 @@ service cloud.firestore {
       allow write: if request.auth != null && (request.auth.uid == userId || request.auth.uid == followerId);
     }
     
-    // User Likes collection
-    match /userLikes/{userId}/{document=**} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // User Likes rules
+    match /userLikes/{userId}/likedVideos/{videoId} {
+      allow read: if true;  // Anyone can see who liked a video
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId;  // Ensure userId matches
+      allow delete: if request.auth != null 
+        && request.auth.uid == userId;
     }
     
     // Username uniqueness collection
@@ -71,8 +77,16 @@ service cloud.firestore {
     match /videos/{videoId} {
       allow read: if true;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && 
-        get(/databases/$(database)/documents/videos/$(videoId)).data.userId == request.auth.uid;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||  // Video owner can update
+        (
+          // Allow updating only likes count from other users
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+          // Ensure the increment is only +1 or -1
+          math.abs(request.resource.data.likes - resource.data.likes) <= 1
+        )
+      );
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
     // Comments collection rules
@@ -91,6 +105,15 @@ service cloud.firestore {
                       request.resource.data.userId == request.auth.uid;
       // Only comment owner can update or delete
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Allow collection group queries for likedVideos
+    match /{path=**}/likedVideos/{likeId} {
+      allow read: if true;  // Anyone can read likes
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid;  // Only the liker can create
+      allow delete: if request.auth != null 
+        && request.auth.uid == resource.data.userId;  // Only the liker can delete
     }
     
     // Default deny all other collections

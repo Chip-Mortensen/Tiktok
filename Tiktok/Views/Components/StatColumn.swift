@@ -3,6 +3,8 @@ import SwiftUI
 struct StatColumn: View {
     let count: Int
     let title: String
+    var isEnabled: Bool = true
+    var action: (() -> Void)?
     
     var body: some View {
         VStack {
@@ -12,6 +14,12 @@ struct StatColumn: View {
             Text(title)
                 .font(.footnote)
                 .foregroundColor(.secondary)
+        }
+        .opacity(isEnabled ? 1 : 0.6)
+        .onTapGesture {
+            if isEnabled {
+                action?()
+            }
         }
     }
 } 

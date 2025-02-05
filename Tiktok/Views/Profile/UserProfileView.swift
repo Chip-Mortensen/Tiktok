@@ -4,6 +4,7 @@ import FirebaseAuth
 struct UserProfileView: View {
     let userId: String
     @StateObject private var viewModel = UserProfileViewModel()
+    @State private var activeSheet: UserListSheetType?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -33,9 +34,22 @@ struct UserProfileView: View {
                 
                 // Stats Row
                 HStack(spacing: 32) {
-                    StatColumn(count: viewModel.user?.followingCount ?? 0, title: "Following")
-                    StatColumn(count: viewModel.user?.followersCount ?? 0, title: "Followers")
-                    StatColumn(count: viewModel.user?.likesCount ?? 0, title: "Likes")
+                    StatColumn(count: viewModel.user?.followingCount ?? 0, 
+                             title: "Following",
+                             action: { activeSheet = .following })
+                    
+                    StatColumn(count: viewModel.user?.followersCount ?? 0, 
+                             title: "Followers",
+                             action: { activeSheet = .followers })
+                    
+                    StatColumn(count: viewModel.user?.likesCount ?? 0, 
+                             title: "Likes",
+                             isEnabled: userId == Auth.auth().currentUser?.uid,
+                             action: { 
+                                if userId == Auth.auth().currentUser?.uid {
+                                    activeSheet = .likes
+                                }
+                             })
                 }
                 
                 // Bio
@@ -56,24 +70,24 @@ struct UserProfileView: View {
                         Text(viewModel.isFollowing ? "Following" : "Follow")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(viewModel.isFollowing ? .primary : .white)
-                            .frame(width: 160, height: 44)
+                            .frame(width: 120, height: 32)
                             .background(viewModel.isFollowing ? Color.gray.opacity(0.1) : Color.blue)
-                            .cornerRadius(22)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: viewModel.isFollowing ? 1 : 0)
-                            )
+                            .foregroundColor(viewModel.isFollowing ? .primary : .white)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
             }
             .padding(.vertical)
+            .padding(.horizontal)
             
             // Videos Grid
             UserVideosGridView(viewModel: viewModel)
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(viewModel.user?.username ?? "Profile")
+        .sheet(item: $activeSheet) { sheetType in
+            UserListSheetView(sheetType: sheetType, userId: userId)
+        }
         .task {
             await viewModel.loadUserProfile(userId: userId)
         }
