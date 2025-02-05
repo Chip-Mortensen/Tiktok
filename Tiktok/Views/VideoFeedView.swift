@@ -181,6 +181,7 @@ struct VideoContent: View {
     @State private var isPlaying = false
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var videoService: VideoService
+    @EnvironmentObject private var bookmarkService: BookmarkService
     @State private var showingComments = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
@@ -285,13 +286,21 @@ struct VideoContent: View {
                             }
                         }
                         
-                        // Bookmark Button (placeholder)
+                        // Bookmark Button
                         Button {
-                            // TODO: Implement bookmarks
+                            Task {
+                                // Create a local copy
+                                var videoToUpdate = video
+                                await bookmarkService.toggleBookmark(for: &videoToUpdate)
+                                // Update the binding after the async operation
+                                video = videoToUpdate
+                            }
                         } label: {
-                            Image(systemName: "bookmark")
+                            Image(systemName: bookmarkService.bookmarkedVideoIds.contains(video.id) ? "bookmark.fill" : "bookmark")
                                 .font(.title)
                                 .foregroundColor(.white)
+                                .scaleEffect(video.isBookmarked ? 1.2 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isBookmarked)
                         }
                         
                         // Sound indicator

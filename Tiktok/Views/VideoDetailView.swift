@@ -6,6 +6,7 @@ struct VideoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var viewModel: ProfileViewModel
     @EnvironmentObject private var videoService: VideoService
+    @EnvironmentObject private var bookmarkService: BookmarkService
     @State private var showingEditSheet = false
     @State private var showDeleteConfirmation = false
     @State private var selectedUserId: String? = nil
@@ -33,6 +34,7 @@ struct VideoDetailView: View {
                     selectedUserId: $selectedUserId,
                     pushUserProfile: $pushUserProfile
                 )
+                .environmentObject(bookmarkService)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)

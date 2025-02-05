@@ -5,8 +5,10 @@ struct ProfileView: View {
     @State private var selectedTab = 0
     @State private var showEditProfile = false
     @State private var showSettings = false
+    @State private var showBookmarks = false
     @State private var bio = ""
     @State private var activeSheet: UserListSheetType?
+    @EnvironmentObject private var bookmarkService: BookmarkService
     
     var body: some View {
         NavigationStack {
@@ -137,6 +139,12 @@ struct ProfileView: View {
                             Label("Edit Profile", systemImage: "pencil")
                         }
                         
+                        Button {
+                            showBookmarks = true
+                        } label: {
+                            Label("Bookmarks", systemImage: "bookmark.fill")
+                        }
+                        
                         Button(role: .destructive) {
                             viewModel.signOut()
                         } label: {
@@ -160,6 +168,9 @@ struct ProfileView: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $showBookmarks) {
+                BookmarksView()
             }
             .task {
                 await viewModel.fetchUserData()

@@ -14,12 +14,14 @@ extension EnvironmentValues {
 struct MainTabView: View {
     @State private var selectedTab = 0
     @StateObject private var appState = AppState.shared
+    @StateObject private var bookmarkService = BookmarkService.shared
     
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 VideoFeedView()
                     .environment(\.tabSelection, $selectedTab)
+                    .environmentObject(bookmarkService)
             }
             .tabItem {
                 Image(systemName: "house")
@@ -50,6 +52,7 @@ struct MainTabView: View {
             NavigationStack {
                 ProfileView()
                     .environment(\.tabSelection, $selectedTab)
+                    .environmentObject(bookmarkService)
             }
             .tabItem {
                 Image(systemName: "person")
@@ -59,6 +62,9 @@ struct MainTabView: View {
         }
         .environmentObject(appState)
         .onAppear {
+            // Start listening for bookmarks
+            bookmarkService.startListening()
+            
             // Set tab bar appearance
             let appearance = UITabBarAppearance()
             appearance.configureWithDefaultBackground() // Use default background instead of opaque

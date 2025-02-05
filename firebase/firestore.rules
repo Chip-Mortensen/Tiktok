@@ -59,6 +59,16 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
     
+    // User Bookmarks rules
+    match /userBookmarks/{userId}/bookmarkedVideos/{videoId} {
+      allow read: if true;  // Anyone can see bookmarked videos
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['timestamp']);  // Ensure only timestamp is stored
+      allow delete: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+    
     // Username uniqueness collection
     match /usernames/{username} {
       allow read: if true;

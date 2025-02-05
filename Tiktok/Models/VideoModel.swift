@@ -15,6 +15,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
     
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
+    var isBookmarked: Bool = false
     
     struct Comment: Identifiable, Codable, Hashable {
         let id: String
@@ -44,6 +45,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
          thumbnailUrl: String? = nil,
          m3u8Url: String? = nil,
          isLiked: Bool = false,
+         isBookmarked: Bool = false,
          commentsCount: Int = 0) {
         self.id = id
         self.userId = userId
@@ -56,6 +58,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
         self.thumbnailUrl = thumbnailUrl
         self.m3u8Url = m3u8Url
         self.isLiked = isLiked
+        self.isBookmarked = isBookmarked
         self.commentsCount = commentsCount
     }
     
@@ -70,11 +73,20 @@ struct VideoModel: Identifiable, Codable, Hashable {
         isLiked = false
     }
     
+    mutating func bookmark() {
+        isBookmarked = true
+    }
+    
+    mutating func unbookmark() {
+        isBookmarked = false
+    }
+    
     // Hashable conformance - use only id for equality
     static func == (lhs: VideoModel, rhs: VideoModel) -> Bool {
         lhs.id == rhs.id &&
         lhs.isLiked == rhs.isLiked &&
-        lhs.likes == rhs.likes
+        lhs.likes == rhs.likes &&
+        lhs.isBookmarked == rhs.isBookmarked
     }
     
     func hash(into hasher: inout Hasher) {

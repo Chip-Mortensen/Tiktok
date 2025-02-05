@@ -3,6 +3,7 @@ import SwiftUI
 struct VideoThumbnailView: View {
     @Binding var video: VideoModel
     let onTap: () -> Void
+    @EnvironmentObject private var bookmarkService: BookmarkService
     
     var body: some View {
         Button(action: onTap) {
@@ -33,13 +34,22 @@ struct VideoThumbnailView: View {
                         }
                 }
                 
-                // Overlay with likes count
-                HStack {
-                    Image(systemName: video.isLiked ? "heart.fill" : "heart")
-                        .foregroundColor(video.isLiked ? .red : .white)
-                    Text("\(video.likes)")
-                        .foregroundColor(.white)
-                        .font(.caption)
+                // Overlay with likes and bookmarks
+                HStack(spacing: 8) {
+                    // Likes
+                    HStack {
+                        Image(systemName: video.isLiked ? "heart.fill" : "heart")
+                            .foregroundColor(video.isLiked ? .red : .white)
+                        Text("\(video.likes)")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                    }
+                    
+                    // Bookmarks
+                    if bookmarkService.bookmarkedVideoIds.contains(video.id) {
+                        Image(systemName: "bookmark.fill")
+                            .foregroundColor(.white)
+                    }
                 }
                 .padding(6)
                 .background(Color.black.opacity(0.5))
