@@ -39,38 +39,40 @@ struct VideoFeedView: View {
     @State private var player: AVPlayer?
     
     var body: some View {
-        ZStack {
-            // Base black background
-            Color.black.edgesIgnoringSafeArea(.all)
-            
-            if viewModel.videos.isEmpty {
-                // Empty state
-                VStack {
-                    Image(systemName: "video.slash")
-                        .font(.system(size: 50))
-                        .foregroundColor(.gray)
-                    Text("No videos yet")
-                        .font(.headline)
-                        .foregroundColor(.gray)
+        NavigationStack {
+            ZStack {
+                // Base black background
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                if viewModel.videos.isEmpty {
+                    // Empty state
+                    VStack {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray)
+                        Text("No videos yet")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                    }
+                } else if viewModel.isLoading {
+                    ProgressView()
+                } else {
+                    VideoPager(
+                        videos: $viewModel.videos,
+                        currentIndex: $currentIndex,
+                        selectedUserId: $selectedUserId,
+                        pushUserProfile: $pushUserProfile
+                    )
+                    .environmentObject(viewModel)
+                    .environmentObject(profileViewModel)
+                    .environmentObject(appState)
                 }
-            } else if viewModel.isLoading {
-                ProgressView()
-            } else {
-                VideoPager(
-                    videos: $viewModel.videos,
-                    currentIndex: $currentIndex,
-                    selectedUserId: $selectedUserId,
-                    pushUserProfile: $pushUserProfile
-                )
-                .environmentObject(viewModel)
-                .environmentObject(profileViewModel)
-                .environmentObject(appState)
             }
-        }
-        .customNavigationBar()
-        .navigationDestination(isPresented: $pushUserProfile) {
-            if let userId = selectedUserId {
-                UserProfileView(userId: userId)
+            .customNavigationBar()
+            .navigationDestination(isPresented: $pushUserProfile) {
+                if let userId = selectedUserId {
+                    UserProfileView(userId: userId)
+                }
             }
         }
         .task {
@@ -175,7 +177,7 @@ struct VideoContent: View {
     @Binding var pushUserProfile: Bool
     @State private var player: AVPlayer?
     @State private var isPlaying = false
-    @EnvironmentObject private var viewModel: VideoFeedViewModel
+    @StateObject private var viewModel = VideoFeedViewModel()  // Create a local view model instance
     @EnvironmentObject private var appState: AppState
     @State private var showingComments = false
     @Environment(\.dismiss) private var dismiss
