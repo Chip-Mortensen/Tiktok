@@ -376,8 +376,8 @@ struct VideoContent: View {
                 // Load the asset asynchronously
                 Task {
                     do {
-                        try await asset.load(.isPlayable)
-                        if asset.isPlayable {
+                        let isPlayable = try await asset.load(.isPlayable)
+                        if isPlayable {
                             await MainActor.run {
                                 // Start playing once ready
                                 self.player?.play()
