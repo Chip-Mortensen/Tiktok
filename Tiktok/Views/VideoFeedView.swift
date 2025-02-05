@@ -337,22 +337,58 @@ struct VideoContent: View {
     }
     
     private func setupAndPlay() {
-        if player == nil, let videoUrl = URL(string: video.videoUrl) {
-            let playerItem = AVPlayerItem(url: videoUrl)
-            player = AVPlayer(playerItem: playerItem)
-            
-            // Set up looping
-            NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: playerItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
+        if player == nil {
+            let videoUrl: URL?
+            if let m3u8UrlString = video.m3u8Url {
+                videoUrl = URL(string: m3u8UrlString)
+            } else {
+                videoUrl = URL(string: video.videoUrl)
             }
             
-            // Set initial mute state
-            player?.isMuted = appState.isMuted
+            if let videoUrl = videoUrl {
+                // Create an asset with an optimized loading configuration
+                let asset = AVURLAsset(url: videoUrl, options: [
+                    AVURLAssetPreferPreciseDurationAndTimingKey: true,
+                    "AVURLAssetHTTPHeaderFieldsKey": [
+                        "User-Agent": "TikTok-iOS"
+                    ]
+                ])
+                
+                // Create a player item with automatic buffering
+                let playerItem = AVPlayerItem(asset: asset)
+                playerItem.preferredForwardBufferDuration = 8.0 // Buffer 8 seconds ahead
+                
+                // Create player immediately for UI purposes
+                player = AVPlayer(playerItem: playerItem)
+                player?.automaticallyWaitsToMinimizeStalling = true
+                player?.isMuted = appState.isMuted
+                
+                // Set up looping
+                NotificationCenter.default.addObserver(
+                    forName: .AVPlayerItemDidPlayToEndTime,
+                    object: playerItem,
+                    queue: .main
+                ) { [weak player] _ in
+                    player?.seek(to: .zero)
+                    player?.play()
+                }
+                
+                // Load the asset asynchronously
+                Task {
+                    do {
+                        try await asset.load(.isPlayable)
+                        if asset.isPlayable {
+                            await MainActor.run {
+                                // Start playing once ready
+                                self.player?.play()
+                                self.isPlaying = true
+                            }
+                        }
+                    } catch {
+                        print("Failed to load asset: \(error)")
+                    }
+                }
+            }
         }
         player?.play()
         isPlaying = true

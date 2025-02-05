@@ -122,7 +122,8 @@ class FirestoreService {
                 ]
             },
             "timestamp": FieldValue.serverTimestamp(),
-            "thumbnailUrl": video.thumbnailUrl as Any
+            "thumbnailUrl": video.thumbnailUrl as Any,
+            "m3u8Url": video.m3u8Url as Any
         ]
         
         // Update the videos collection using the video.id as the document ID
@@ -156,6 +157,7 @@ class FirestoreService {
         // Construct storage paths
         let videoPath = "videos/\(video.userId)/\(video.id).mp4"
         let thumbnailPath = "thumbnails/\(video.userId)/\(video.id).jpg"
+        let hlsBasePath = "hls/\(video.userId)/\(video.id)"
         
         // Delete video file
         let videoStorageRef = storage.child(videoPath)
@@ -165,6 +167,18 @@ class FirestoreService {
         if video.thumbnailUrl != nil {
             let thumbnailStorageRef = storage.child(thumbnailPath)
             try await thumbnailStorageRef.delete()
+        }
+
+        // Delete HLS files if they exist
+        if video.m3u8Url != nil {
+            // List all files in the HLS directory
+            let hlsRef = storage.child(hlsBasePath)
+            let hlsFiles = try await hlsRef.listAll()
+            
+            // Delete each file in the HLS directory
+            for item in hlsFiles.items {
+                try await item.delete()
+            }
         }
 
         // Also decrement the posts count for the user
@@ -210,6 +224,7 @@ class FirestoreService {
                 comments: comments,
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                 thumbnailUrl: data["thumbnailUrl"] as? String,
+                m3u8Url: data["m3u8Url"] as? String,
                 commentsCount: data["commentsCount"] as? Int ?? 0
             )
             videos.append(video)
@@ -260,6 +275,7 @@ class FirestoreService {
                 comments: comments,
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                 thumbnailUrl: data["thumbnailUrl"] as? String,
+                m3u8Url: data["m3u8Url"] as? String,
                 commentsCount: data["commentsCount"] as? Int ?? 0
             )
         }
@@ -316,6 +332,7 @@ class FirestoreService {
                     comments: comments,
                     timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                     thumbnailUrl: data["thumbnailUrl"] as? String,
+                    m3u8Url: data["m3u8Url"] as? String,
                     commentsCount: data["commentsCount"] as? Int ?? 0
                 )
                 videos.append(video)
@@ -421,6 +438,7 @@ class FirestoreService {
             comments: data["comments"] as? [VideoModel.Comment] ?? [],
             timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
             thumbnailUrl: data["thumbnailUrl"] as? String,
+            m3u8Url: data["m3u8Url"] as? String,
             commentsCount: data["commentsCount"] as? Int ?? 0
         )
     }
@@ -576,6 +594,7 @@ class FirestoreService {
                                     comments: comments,
                                     timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                                     thumbnailUrl: data["thumbnailUrl"] as? String,
+                                    m3u8Url: data["m3u8Url"] as? String,
                                     commentsCount: data["commentsCount"] as? Int ?? 0
                                 )
                             }
@@ -641,6 +660,7 @@ class FirestoreService {
                         comments: data["comments"] as? [VideoModel.Comment] ?? [],
                         timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                         thumbnailUrl: data["thumbnailUrl"] as? String,
+                        m3u8Url: data["m3u8Url"] as? String,
                         commentsCount: data["commentsCount"] as? Int ?? 0
                     )
                     

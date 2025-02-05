@@ -11,6 +11,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
     var commentsCount: Int
     let timestamp: Date
     var thumbnailUrl: String?
+    var m3u8Url: String?
     
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
@@ -41,6 +42,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
          comments: [Comment] = [],
          timestamp: Date = Date(),
          thumbnailUrl: String? = nil,
+         m3u8Url: String? = nil,
          isLiked: Bool = false,
          commentsCount: Int = 0) {
         self.id = id
@@ -52,6 +54,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
         self.comments = comments
         self.timestamp = timestamp
         self.thumbnailUrl = thumbnailUrl
+        self.m3u8Url = m3u8Url
         self.isLiked = isLiked
         self.commentsCount = commentsCount
     }
