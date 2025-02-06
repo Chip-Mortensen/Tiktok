@@ -246,11 +246,7 @@ struct VideoContent: View {
         let time = CMTime(seconds: targetTime, preferredTimescale: 600)
         
         // Seek immediately without waiting for precise seek
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
-            if finished && self.isActive {
-                player.play()
-            }
-        }
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
     
     var body: some View {
@@ -395,6 +391,11 @@ struct VideoContent: View {
                         isDragging: isDragging,
                         dragProgress: dragProgress,
                         onDragChanged: { newProgress in
+                            if !isDragging {
+                                // Only pause when dragging starts
+                                player?.pause()
+                                isPlaying = false
+                            }
                             isDragging = true
                             handleScrubbing(to: newProgress)
                         },
@@ -402,6 +403,7 @@ struct VideoContent: View {
                             isDragging = false
                             if let player = player {
                                 player.play()
+                                isPlaying = true
                             }
                         },
                         segments: video.segments

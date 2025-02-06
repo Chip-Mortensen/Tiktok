@@ -51,19 +51,14 @@ struct VideoProgressBar: View {
                                 Rectangle()
                                     .fill(Color.white.opacity(0.3))
                                     .frame(width: segmentWidth, height: progressBarHeight)
-                                    .overlay(
-                                        Rectangle()
-                                            .fill(Color.white)
-                                            .frame(width: 2, height: segmentMarkerHeight)
-                                            .offset(x: segmentWidth / 2)
-                                            .opacity(index < segments.count - 1 ? 1 : 0)
-                                    )
+                                    .cornerRadius(progressBarHeight / 2)
                             }
                         } else {
                             Rectangle()
                                 .fill(Color.white.opacity(0.3))
                                 .frame(height: progressBarHeight)
                                 .frame(maxWidth: .infinity)
+                                .cornerRadius(progressBarHeight / 2)
                         }
                     }
                     
@@ -79,11 +74,13 @@ struct VideoProgressBar: View {
                                 Rectangle()
                                     .fill(Color.blue)
                                     .frame(width: fillWidth, height: progressBarHeight)
+                                    .cornerRadius(progressBarHeight / 2)
                             }
                         } else {
                             Rectangle()
                                 .fill(Color.blue)
                                 .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: progressBarHeight)
+                                .cornerRadius(progressBarHeight / 2)
                         }
                     }
                 }
