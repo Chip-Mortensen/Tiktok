@@ -8,9 +8,14 @@ struct VideoProgressBar: View {
     let dragProgress: Double
     let onDragChanged: (Double) -> Void
     let onDragEnded: () -> Void
+    let segments: [VideoModel.Segment]?
+    
+    // Constants for hit target
+    private let progressBarHeight: CGFloat = 4
+    private let hitTargetHeight: CGFloat = 30  // Standard touch target size
+    private let segmentMarkerHeight: CGFloat = 8
     
     private var currentProgress: Double {
-        // Ensure progress is between 0 and 1
         if duration <= 0 { return 0 }
         if isDragging { return dragProgress }
         return min(1, max(0, progress))
@@ -18,19 +23,80 @@ struct VideoProgressBar: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                // Background track
+            // Hit target area with progress bar
+            ZStack(alignment: .bottom) {
                 Rectangle()
-                    .fill(Color.white.opacity(0.3))
-                    .frame(height: 4)
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let progress = max(0, min(1, value.location.x / geometry.size.width))
+                                onDragChanged(progress)
+                            }
+                            .onEnded { _ in
+                                onDragEnded()
+                            }
+                    )
                 
-                // Progress fill
-                Rectangle()
-                    .fill(Color.blue)
-                    .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: 4)
+                // Progress bar container
+                ZStack(alignment: .leading) {
+                    // Background track with segment breaks
+                    HStack(spacing: 4) {
+                        if let segments = segments {
+                            ForEach(segments.indices, id: \.self) { index in
+                                let segment = segments[index]
+                                let segmentWidth = (segment.endTime - segment.startTime) / duration * geometry.size.width
+                                
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.3))
+                                    .frame(width: segmentWidth, height: progressBarHeight)
+                                    .overlay(
+                                        Rectangle()
+                                            .fill(Color.white)
+                                            .frame(width: 2, height: segmentMarkerHeight)
+                                            .offset(x: segmentWidth / 2)
+                                            .opacity(index < segments.count - 1 ? 1 : 0)
+                                    )
+                            }
+                        } else {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.3))
+                                .frame(height: progressBarHeight)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    
+                    // Progress fill
+                    HStack(spacing: 4) {
+                        if let segments = segments {
+                            ForEach(segments.indices, id: \.self) { index in
+                                let segment = segments[index]
+                                let segmentWidth = (segment.endTime - segment.startTime) / duration * geometry.size.width
+                                let segmentProgress = max(0, min(1, (currentProgress * duration - segment.startTime) / (segment.endTime - segment.startTime)))
+                                let fillWidth = segmentWidth * segmentProgress
+                                
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: fillWidth, height: progressBarHeight)
+                            }
+                        } else {
+                            Rectangle()
+                                .fill(Color.blue)
+                                .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: progressBarHeight)
+                        }
+                    }
+                }
             }
         }
-        .frame(height: 4)
+        .frame(height: hitTargetHeight)
         .padding(.bottom, 2)
     }
+}
+
+struct VideoSegment {
+    let startTime: Double
+    let endTime: Double
+    let topic: String
+    let summary: String
 } 

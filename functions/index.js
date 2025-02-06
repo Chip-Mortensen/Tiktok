@@ -7,6 +7,7 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const videoSegmentation = require('./videoSegmentation');
 
 initializeApp();
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -157,3 +158,6 @@ exports.generateHLS = onObjectFinalized(
     }
   }
 );
+
+// Export video segmentation function
+exports.transcribeAndSegmentAudio = videoSegmentation.transcribeAndSegmentAudio;

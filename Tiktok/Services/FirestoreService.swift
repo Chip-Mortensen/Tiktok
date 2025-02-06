@@ -205,6 +205,33 @@ class FirestoreService {
             // Fetch username
             let username = try await getUsernameForUserId(userId)
             
+            // Parse segments if available
+            let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData -> VideoModel.Segment? in
+                guard let startTime = segmentData["startTime"] as? Double,
+                      let endTime = segmentData["endTime"] as? Double,
+                      let topic = segmentData["topic"] as? String,
+                      let summary = segmentData["summary"] as? String else {
+                    print("⚠️ Invalid segment data:", segmentData)
+                    return nil
+                }
+                return VideoModel.Segment(
+                    startTime: startTime,
+                    endTime: endTime,
+                    topic: topic,
+                    summary: summary
+                )
+            }
+            
+            print("🎬 Parsed segments for video \(document.documentID):", segments?.count ?? 0)
+            if let segments = segments {
+                for (index, segment) in segments.enumerated() {
+                    print("  Segment \(index):")
+                    print("    Start: \(segment.startTime)s")
+                    print("    End: \(segment.endTime)s")
+                    print("    Topic: \(segment.topic)")
+                }
+            }
+            
             let comments = (data["comments"] as? [[String: Any]])?.compactMap { commentData in
                 return VideoModel.Comment(
                     id: commentData["id"] as? String ?? UUID().uuidString,
@@ -225,7 +252,8 @@ class FirestoreService {
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                 thumbnailUrl: data["thumbnailUrl"] as? String,
                 m3u8Url: data["m3u8Url"] as? String,
-                commentsCount: data["commentsCount"] as? Int ?? 0
+                commentsCount: data["commentsCount"] as? Int ?? 0,
+                segments: segments
             )
             videos.append(video)
         }
@@ -427,6 +455,33 @@ class FirestoreService {
         let userData = userDoc.data()
         let username = userData?["username"] as? String
         
+        // Parse segments if available
+        let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData -> VideoModel.Segment? in
+            guard let startTime = segmentData["startTime"] as? Double,
+                  let endTime = segmentData["endTime"] as? Double,
+                  let topic = segmentData["topic"] as? String,
+                  let summary = segmentData["summary"] as? String else {
+                print("⚠️ Invalid segment data:", segmentData)
+                return nil
+            }
+            return VideoModel.Segment(
+                startTime: startTime,
+                endTime: endTime,
+                topic: topic,
+                summary: summary
+            )
+        }
+        
+        print("🎬 Parsed segments for video \(videoDoc.documentID):", segments?.count ?? 0)
+        if let segments = segments {
+            for (index, segment) in segments.enumerated() {
+                print("  Segment \(index):")
+                print("    Start: \(segment.startTime)s")
+                print("    End: \(segment.endTime)s")
+                print("    Topic: \(segment.topic)")
+            }
+        }
+        
         // Create the video model
         return VideoModel(
             id: videoDoc.documentID,
@@ -439,7 +494,8 @@ class FirestoreService {
             timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
             thumbnailUrl: data["thumbnailUrl"] as? String,
             m3u8Url: data["m3u8Url"] as? String,
-            commentsCount: data["commentsCount"] as? Int ?? 0
+            commentsCount: data["commentsCount"] as? Int ?? 0,
+            segments: segments
         )
     }
     
@@ -658,6 +714,42 @@ class FirestoreService {
                     let userId = data["userId"] as? String ?? ""
                     let username = try? await self.getUsernameForUserId(userId)
                     
+                    // Parse segments if available
+                    let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData -> VideoModel.Segment? in
+                        guard let startTime = segmentData["startTime"] as? Double,
+                              let endTime = segmentData["endTime"] as? Double,
+                              let topic = segmentData["topic"] as? String,
+                              let summary = segmentData["summary"] as? String else {
+                            print("⚠️ Invalid segment data:", segmentData)
+                            return nil
+                        }
+                        return VideoModel.Segment(
+                            startTime: startTime,
+                            endTime: endTime,
+                            topic: topic,
+                            summary: summary
+                        )
+                    }
+                    
+                    print("🎬 Parsed segments for video \(document.documentID):", segments?.count ?? 0)
+                    if let segments = segments {
+                        for (index, segment) in segments.enumerated() {
+                            print("  Segment \(index):")
+                            print("    Start: \(segment.startTime)s")
+                            print("    End: \(segment.endTime)s")
+                            print("    Topic: \(segment.topic)")
+                        }
+                    }
+                    
+                    let comments = (data["comments"] as? [[String: Any]])?.compactMap { commentData in
+                        return VideoModel.Comment(
+                            id: commentData["id"] as? String ?? UUID().uuidString,
+                            userId: commentData["userId"] as? String ?? "",
+                            text: commentData["text"] as? String ?? "",
+                            timestamp: (commentData["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                        )
+                    } ?? []
+                    
                     let video = VideoModel(
                         id: document.documentID,
                         userId: userId,
@@ -665,11 +757,12 @@ class FirestoreService {
                         videoUrl: data["videoUrl"] as? String ?? "",
                         caption: data["caption"] as? String ?? "",
                         likes: data["likes"] as? Int ?? 0,
-                        comments: data["comments"] as? [VideoModel.Comment] ?? [],
+                        comments: comments,
                         timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                         thumbnailUrl: data["thumbnailUrl"] as? String,
                         m3u8Url: data["m3u8Url"] as? String,
-                        commentsCount: data["commentsCount"] as? Int ?? 0
+                        commentsCount: data["commentsCount"] as? Int ?? 0,
+                        segments: segments
                     )
                     
                     await MainActor.run {

@@ -12,6 +12,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
     let timestamp: Date
     var thumbnailUrl: String?
     var m3u8Url: String?
+    var segments: [Segment]?
     
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
@@ -34,6 +35,13 @@ struct VideoModel: Identifiable, Codable, Hashable {
         }
     }
     
+    struct Segment: Codable, Hashable {
+        let startTime: Double
+        let endTime: Double
+        let topic: String
+        let summary: String
+    }
+    
     init(id: String = UUID().uuidString,
          userId: String,
          username: String?,
@@ -46,7 +54,8 @@ struct VideoModel: Identifiable, Codable, Hashable {
          m3u8Url: String? = nil,
          isLiked: Bool = false,
          isBookmarked: Bool = false,
-         commentsCount: Int = 0) {
+         commentsCount: Int = 0,
+         segments: [Segment]? = nil) {
         self.id = id
         self.userId = userId
         self.username = username
@@ -60,6 +69,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
         self.isLiked = isLiked
         self.isBookmarked = isBookmarked
         self.commentsCount = commentsCount
+        self.segments = segments
     }
     
     // Mutating functions for state updates

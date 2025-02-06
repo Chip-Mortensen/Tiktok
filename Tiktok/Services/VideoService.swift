@@ -62,6 +62,21 @@ class VideoService: ObservableObject {
                     // If we already have this video in our state, preserve any local state
                     if let existingVideo = self.videos[videoId] {
                         newVideo.isBookmarked = existingVideo.isBookmarked
+                        // Preserve segments if they exist in the updated video
+                        if newVideo.segments == nil {
+                            newVideo.segments = existingVideo.segments
+                        }
+                    }
+                    
+                    // Debug: Print segments information
+                    print("🎬 Video \(videoId) segments after update:", newVideo.segments?.count ?? 0)
+                    if let segments = newVideo.segments {
+                        for (index, segment) in segments.enumerated() {
+                            print("  Segment \(index):")
+                            print("    Start: \(segment.startTime)s")
+                            print("    End: \(segment.endTime)s")
+                            print("    Topic: \(segment.topic)")
+                        }
                     }
                     
                     // Update the video in our state with animation

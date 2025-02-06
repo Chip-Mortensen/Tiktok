@@ -186,49 +186,63 @@ struct VideoContent: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
     
-    // New progress tracking state
+    // Progress tracking state
     @State private var progress: Double = 0
     @State private var duration: Double = 0
     @State private var isDragging: Bool = false
     @State private var dragProgress: Double = 0
     @State private var timeObserver: Any?
+    @State private var segments: [VideoSegment]?
     
     private func setupProgressTracking() {
         guard let player = player else { return }
-        
-        // Get video duration and initial position
-        if let duration = player.currentItem?.duration {
-            self.duration = CMTimeGetSeconds(duration)
-            // Set initial progress based on current time
-            let currentTime = CMTimeGetSeconds(player.currentTime())
-            self.progress = self.duration > 0 ? currentTime / self.duration : 0
-        }
         
         // Remove existing observer if any
         if let existing = timeObserver {
             player.removeTimeObserver(existing)
         }
-        
+
         // Create new time observer with more frequent updates
         let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            let currentTime = CMTimeGetSeconds(time)
-            if self.duration > 0 {
-                self.progress = currentTime / self.duration
+            // Get current duration (it might have changed or become available)
+            if let duration = player.currentItem?.duration,
+               duration.isValid && !duration.isIndefinite {
+                let durationInSeconds = CMTimeGetSeconds(duration)
+                if durationInSeconds > 0 {
+                    self.duration = durationInSeconds
+                    let currentTime = CMTimeGetSeconds(time)
+                    self.progress = currentTime / durationInSeconds
+                }
             }
+        }
+        
+        // Also observe the duration becoming available
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { _ in
+            self.progress = 1.0
+            player.seek(to: .zero)
+            player.play()
         }
     }
     
     private func handleScrubbing(to progress: Double) {
-        guard let player = player else { return }
-        guard duration > 0 else { return }
+        guard let player = player,
+              let duration = player.currentItem?.duration,
+              duration.isValid && !duration.isIndefinite else { return }
+        
+        let durationInSeconds = CMTimeGetSeconds(duration)
+        guard durationInSeconds > 0 else { return }
         
         // Update progress immediately for UI responsiveness
         self.progress = progress
         self.dragProgress = progress
         
         // Calculate the target time
-        let targetTime = duration * progress
+        let targetTime = durationInSeconds * progress
         let time = CMTime(seconds: targetTime, preferredTimescale: 600)
         
         // Seek immediately without waiting for precise seek
@@ -241,24 +255,12 @@ struct VideoContent: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            ZStack(alignment: .top) {
                 Color.black
                 
                 if let player = player {
                     CustomVideoPlayer(player: player)
                         .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    // Convert horizontal drag position to progress
-                                    let dragProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                    self.isDragging = true
-                                    handleScrubbing(to: dragProgress)
-                                }
-                                .onEnded { _ in
-                                    self.isDragging = false
-                                }
-                        )
-                        .simultaneousGesture(
                             TapGesture()
                                 .onEnded { _ in
                                     if !pushUserProfile {
@@ -277,6 +279,15 @@ struct VideoContent: View {
                         Color.black
                     }
                 }
+                
+                VideoSegmentOverlay(
+                    segments: video.segments,
+                    currentProgress: progress,
+                    duration: duration,
+                    isDragging: isDragging
+                )
+                .padding(.top, geometry.safeAreaInsets.top)
+                .animation(.easeInOut(duration: 0.2), value: isDragging)
                 
                 VStack(spacing: 0) {
                     Spacer()
@@ -384,6 +395,7 @@ struct VideoContent: View {
                         isDragging: isDragging,
                         dragProgress: dragProgress,
                         onDragChanged: { newProgress in
+                            isDragging = true
                             handleScrubbing(to: newProgress)
                         },
                         onDragEnded: {
@@ -391,7 +403,8 @@ struct VideoContent: View {
                             if let player = player {
                                 player.play()
                             }
-                        }
+                        },
+                        segments: video.segments
                     )
                 }
                 .padding(.bottom, geometry.safeAreaInsets.bottom)
@@ -467,6 +480,15 @@ struct VideoContent: View {
                 player = AVPlayer(playerItem: playerItem)
                 player?.automaticallyWaitsToMinimizeStalling = true
                 player?.isMuted = appState.isMuted
+                
+                // Debug: Print segments information
+                print("DEBUG: Video segments for video \(video.id):", video.segments ?? "No segments")
+                if let segments = video.segments {
+                    print("DEBUG: Number of segments:", segments.count)
+                    for (index, segment) in segments.enumerated() {
+                        print("DEBUG: Segment \(index):", segment)
+                    }
+                }
                 
                 // Set up looping
                 NotificationCenter.default.addObserver(
