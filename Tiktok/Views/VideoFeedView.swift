@@ -390,12 +390,12 @@ struct VideoContent: View {
                                     showingSmartSkip = true
                                 } label: {
                                     VStack(spacing: 4) {
-                                        Image(systemName: "forward.end.fill")
+                                        Image(systemName: smartSkipManager.isAutoSkipEnabled ? "forward.frame.fill" : "forward.frame")
                                             .font(.title)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(smartSkipManager.isAutoSkipEnabled ? .blue : .white)
                                         Text("Skip")
                                             .font(.caption)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(smartSkipManager.isAutoSkipEnabled ? .blue : .white)
                                     }
                                 }
                             }

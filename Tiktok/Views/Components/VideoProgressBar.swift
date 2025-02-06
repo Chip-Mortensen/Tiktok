@@ -14,6 +14,7 @@ struct VideoProgressBar: View {
     private let progressBarHeight: CGFloat = 4
     private let hitTargetHeight: CGFloat = 30  // Standard touch target size
     private let segmentMarkerHeight: CGFloat = 8
+    private let progressBarDraggingHeight: CGFloat = 8  // Height when dragging
     
     private var currentProgress: Double {
         if duration <= 0 { return 0 }
@@ -21,10 +22,15 @@ struct VideoProgressBar: View {
         return min(1, max(0, progress))
     }
     
+    private var currentBarHeight: CGFloat {
+        isDragging ? progressBarDraggingHeight : progressBarHeight
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             // Hit target area with progress bar
             ZStack(alignment: .bottom) {
+                // Hit target
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
@@ -50,17 +56,18 @@ struct VideoProgressBar: View {
                                 
                                 Rectangle()
                                     .fill(Color.white.opacity(0.3))
-                                    .frame(width: segmentWidth, height: progressBarHeight)
-                                    .cornerRadius(progressBarHeight / 2)
+                                    .frame(width: segmentWidth, height: currentBarHeight)
+                                    .cornerRadius(currentBarHeight / 2)
                             }
                         } else {
                             Rectangle()
                                 .fill(Color.white.opacity(0.3))
-                                .frame(height: progressBarHeight)
+                                .frame(height: currentBarHeight)
                                 .frame(maxWidth: .infinity)
-                                .cornerRadius(progressBarHeight / 2)
+                                .cornerRadius(currentBarHeight / 2)
                         }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: isDragging)
                     
                     // Progress fill
                     HStack(spacing: 4) {
@@ -73,16 +80,17 @@ struct VideoProgressBar: View {
                                 
                                 Rectangle()
                                     .fill(segment.isFiller ? Color.gray : Color.blue)
-                                    .frame(width: fillWidth, height: progressBarHeight)
-                                    .cornerRadius(progressBarHeight / 2)
+                                    .frame(width: fillWidth, height: currentBarHeight)
+                                    .cornerRadius(currentBarHeight / 2)
                             }
                         } else {
                             Rectangle()
                                 .fill(Color.blue)
-                                .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: progressBarHeight)
-                                .cornerRadius(progressBarHeight / 2)
+                                .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: currentBarHeight)
+                                .cornerRadius(currentBarHeight / 2)
                         }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: isDragging)
                 }
             }
         }
