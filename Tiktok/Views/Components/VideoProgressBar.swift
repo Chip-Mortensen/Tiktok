@@ -21,15 +21,16 @@ struct VideoProgressBar: View {
             ZStack(alignment: .leading) {
                 // Background track
                 Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 3)
+                    .fill(Color.white.opacity(0.3))
+                    .frame(height: 4)
                 
                 // Progress fill
                 Rectangle()
                     .fill(Color.blue)
-                    .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: 3)
+                    .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: 4)
             }
         }
-        .frame(height: 3)
+        .frame(height: 4)
+        .padding(.bottom, 2)
     }
 } 

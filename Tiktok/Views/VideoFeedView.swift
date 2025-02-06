@@ -383,8 +383,15 @@ struct VideoContent: View {
                         duration: duration,
                         isDragging: isDragging,
                         dragProgress: dragProgress,
-                        onDragChanged: { _ in },
-                        onDragEnded: { }
+                        onDragChanged: { newProgress in
+                            handleScrubbing(to: newProgress)
+                        },
+                        onDragEnded: {
+                            isDragging = false
+                            if let player = player {
+                                player.play()
+                            }
+                        }
                     )
                 }
                 .padding(.bottom, geometry.safeAreaInsets.bottom)
