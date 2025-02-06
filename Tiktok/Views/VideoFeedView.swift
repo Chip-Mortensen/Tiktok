@@ -37,6 +37,7 @@ struct VideoFeedView: View {
     @State private var pushUserProfile = false
     @State private var isPlaying = false
     @State private var player: AVPlayer?
+    @State private var showingSmartSkip = false
     
     var body: some View {
         NavigationStack {
@@ -182,7 +183,9 @@ struct VideoContent: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var videoService: VideoService
     @EnvironmentObject private var bookmarkService: BookmarkService
+    @StateObject private var smartSkipManager = SmartSkipManager()
     @State private var showingComments = false
+    @State private var showingSmartSkip = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
     
@@ -213,6 +216,14 @@ struct VideoContent: View {
                     self.duration = durationInSeconds
                     let currentTime = CMTimeGetSeconds(time)
                     self.progress = currentTime / durationInSeconds
+                    
+                    // Check for filler segment and auto-skip if needed
+                    if let currentSegment = video.segments?.first(where: { segment in
+                        return segment.startTime <= currentTime && currentTime <= segment.endTime
+                    }), smartSkipManager.shouldSkipSegment(currentSegment) {
+                        let targetTime = CMTime(seconds: currentSegment.endTime, preferredTimescale: 1000)
+                        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    }
                 }
             }
         }
@@ -222,10 +233,9 @@ struct VideoContent: View {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { _ in
-            self.progress = 1.0
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
     }
     
@@ -374,6 +384,22 @@ struct VideoContent: View {
                                     .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isBookmarked)
                             }
                             
+                            // Smart Skip Button (only show if video has segments)
+                            if video.segments?.isEmpty == false {
+                                Button {
+                                    showingSmartSkip = true
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "forward.end.fill")
+                                            .font(.title)
+                                            .foregroundColor(.white)
+                                        Text("Skip")
+                                            .font(.caption)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                            }
+                            
                             // Sound indicator
                             Image(systemName: appState.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                                 .font(.title2)
@@ -392,7 +418,6 @@ struct VideoContent: View {
                         dragProgress: dragProgress,
                         onDragChanged: { newProgress in
                             if !isDragging {
-                                // Only pause when dragging starts
                                 player?.pause()
                                 isPlaying = false
                             }
@@ -412,9 +437,21 @@ struct VideoContent: View {
                 .padding(.bottom, geometry.safeAreaInsets.bottom)
             }
             .edgesIgnoringSafeArea(.all)
-        }
-        .sheet(isPresented: $showingComments) {
-            CommentsView(viewModel: CommentsViewModel(videoId: video.id))
+            .sheet(isPresented: $showingComments) {
+                CommentsView(viewModel: CommentsViewModel(videoId: video.id))
+            }
+            .sheet(isPresented: $showingSmartSkip) {
+                if let player = player,
+                   let segments = video.segments {
+                    SmartSkipControls(
+                        player: player,
+                        segments: segments,
+                        currentProgress: progress,
+                        duration: duration,
+                        smartSkipManager: smartSkipManager
+                    )
+                }
+            }
         }
         .onAppear {
             if isActive {
@@ -453,6 +490,9 @@ struct VideoContent: View {
                     video = updatedVideo
                 }
             }
+        }
+        .onChange(of: video.id) { oldValue, newValue in
+            smartSkipManager.resetSkipTracking()
         }
     }
     

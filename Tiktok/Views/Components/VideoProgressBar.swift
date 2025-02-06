@@ -72,7 +72,7 @@ struct VideoProgressBar: View {
                                 let fillWidth = segmentWidth * segmentProgress
                                 
                                 Rectangle()
-                                    .fill(Color.blue)
+                                    .fill(segment.isFiller ? Color.gray : Color.blue)
                                     .frame(width: fillWidth, height: progressBarHeight)
                                     .cornerRadius(progressBarHeight / 2)
                             }

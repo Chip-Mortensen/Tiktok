@@ -129,15 +129,23 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
         messages: [
           {
             role: 'system',
-            content: `You are a video segmentation AI. Given the full transcript below with word-level timestamps, extract major topical segments. The video is ${Math.round(
+            content: `You are a video segmentation AI. Given the full transcript below with word-level timestamps, extract major topical segments and identify filler content. The video is ${Math.round(
               duration
             )} seconds long. Use the word timestamps to create accurate segment boundaries.
+
+Filler content includes:
+- Repetitive or redundant explanations
+- Off-topic tangents
+- Excessive introductions or outros
+- "Um"s, "Ah"s, and verbal pauses
+- Unnecessary small talk
+- Content that doesn't contribute to the main message
 
 Transcript format includes word-level timing:
 ${JSON.stringify(whisperResult.words?.slice(0, 3), null, 2)}
 ...and so on.
 
-Create segments that align with the natural topic changes in the content, using the word timestamps to set precise segment boundaries.`,
+Create segments that align with the natural topic changes in the content, using the word timestamps to set precise segment boundaries. Mark segments as filler when they match the criteria above.`,
           },
           {
             role: 'user',
@@ -160,8 +168,9 @@ Create segments that align with the natural topic changes in the content, using 
                       endTime: { type: 'number' },
                       topic: { type: 'string' },
                       summary: { type: 'string' },
+                      isFiller: { type: 'boolean' },
                     },
-                    required: ['startTime', 'endTime', 'topic', 'summary'],
+                    required: ['startTime', 'endTime', 'topic', 'summary', 'isFiller'],
                     additionalProperties: false,
                   },
                 },

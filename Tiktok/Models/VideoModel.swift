@@ -40,6 +40,7 @@ struct VideoModel: Identifiable, Codable, Hashable {
         let endTime: Double
         let topic: String
         let summary: String
+        let isFiller: Bool
     }
     
     init(id: String = UUID().uuidString,

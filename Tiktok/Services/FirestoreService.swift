@@ -218,7 +218,8 @@ class FirestoreService {
                     startTime: startTime,
                     endTime: endTime,
                     topic: topic,
-                    summary: summary
+                    summary: summary,
+                    isFiller: segmentData["isFiller"] as? Bool ?? false
                 )
             }
             
@@ -468,7 +469,8 @@ class FirestoreService {
                 startTime: startTime,
                 endTime: endTime,
                 topic: topic,
-                summary: summary
+                summary: summary,
+                isFiller: segmentData["isFiller"] as? Bool ?? false
             )
         }
         
@@ -727,7 +729,8 @@ class FirestoreService {
                             startTime: startTime,
                             endTime: endTime,
                             topic: topic,
-                            summary: summary
+                            summary: summary,
+                            isFiller: segmentData["isFiller"] as? Bool ?? false
                         )
                     }
                     
