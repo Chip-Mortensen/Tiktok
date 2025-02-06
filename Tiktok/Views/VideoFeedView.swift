@@ -196,9 +196,12 @@ struct VideoContent: View {
     private func setupProgressTracking() {
         guard let player = player else { return }
         
-        // Get video duration
+        // Get video duration and initial position
         if let duration = player.currentItem?.duration {
             self.duration = CMTimeGetSeconds(duration)
+            // Set initial progress based on current time
+            let currentTime = CMTimeGetSeconds(player.currentTime())
+            self.progress = self.duration > 0 ? currentTime / self.duration : 0
         }
         
         // Remove existing observer if any
@@ -206,15 +209,12 @@ struct VideoContent: View {
             player.removeTimeObserver(existing)
         }
         
-        // Create new time observer
-        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
-            guard let player = player else { return }
-            guard !self.isDragging else { return }
-            
+        // Create new time observer with more frequent updates
+        let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
             let currentTime = CMTimeGetSeconds(time)
             if self.duration > 0 {
-                self.progress = max(0, min(1, currentTime / self.duration))
+                self.progress = currentTime / self.duration
             }
         }
     }
@@ -223,15 +223,18 @@ struct VideoContent: View {
         guard let player = player else { return }
         guard duration > 0 else { return }
         
+        // Update progress immediately for UI responsiveness
+        self.progress = progress
+        self.dragProgress = progress
+        
         // Calculate the target time
         let targetTime = duration * progress
         let time = CMTime(seconds: targetTime, preferredTimescale: 600)
         
         // Seek immediately without waiting for precise seek
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak player] finished in
-            if finished {
-                // Update progress after seek completes
-                self.progress = progress
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+            if finished && self.isActive {
+                player.play()
             }
         }
     }
@@ -249,14 +252,10 @@ struct VideoContent: View {
                                     // Convert horizontal drag position to progress
                                     let dragProgress = max(0, min(1, value.location.x / geometry.size.width))
                                     self.isDragging = true
-                                    self.dragProgress = dragProgress
                                     handleScrubbing(to: dragProgress)
                                 }
                                 .onEnded { _ in
                                     self.isDragging = false
-                                    if isActive {
-                                        player.play()
-                                    }
                                 }
                         )
                         .simultaneousGesture(
