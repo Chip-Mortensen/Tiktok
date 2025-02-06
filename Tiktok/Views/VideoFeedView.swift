@@ -186,130 +186,211 @@ struct VideoContent: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.tabSelection) private var tabSelection
     
+    // New progress tracking state
+    @State private var progress: Double = 0
+    @State private var duration: Double = 0
+    @State private var isDragging: Bool = false
+    @State private var dragProgress: Double = 0
+    @State private var timeObserver: Any?
+    
+    private func setupProgressTracking() {
+        guard let player = player else { return }
+        
+        // Get video duration
+        if let duration = player.currentItem?.duration {
+            self.duration = CMTimeGetSeconds(duration)
+        }
+        
+        // Remove existing observer if any
+        if let existing = timeObserver {
+            player.removeTimeObserver(existing)
+        }
+        
+        // Create new time observer
+        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak player] time in
+            guard let player = player else { return }
+            guard !self.isDragging else { return }
+            
+            let currentTime = CMTimeGetSeconds(time)
+            if self.duration > 0 {
+                self.progress = max(0, min(1, currentTime / self.duration))
+            }
+        }
+    }
+    
+    private func handleScrubbing(to progress: Double) {
+        guard let player = player else { return }
+        guard duration > 0 else { return }
+        
+        // Calculate the target time
+        let targetTime = duration * progress
+        let time = CMTime(seconds: targetTime, preferredTimescale: 600)
+        
+        // Seek immediately without waiting for precise seek
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak player] finished in
+            if finished {
+                // Update progress after seek completes
+                self.progress = progress
+            }
+        }
+    }
+    
     var body: some View {
-        ZStack {
-            Color.black
-            
-            if let player = player {
-                CustomVideoPlayer(player: player)
-                    .gesture(
-                        TapGesture()
-                            .onEnded { _ in
-                                // Only handle mute toggle if not interacting with other UI elements
-                                if !pushUserProfile {
-                                    appState.isMuted.toggle()
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                
+                if let player = player {
+                    CustomVideoPlayer(player: player)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    // Convert horizontal drag position to progress
+                                    let dragProgress = max(0, min(1, value.location.x / geometry.size.width))
+                                    self.isDragging = true
+                                    self.dragProgress = dragProgress
+                                    handleScrubbing(to: dragProgress)
                                 }
-                            }
-                    )
-            } else if let thumbnailUrl = video.thumbnailUrl,
-                      let url = URL(string: thumbnailUrl) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .clipped()
-                } placeholder: {
-                    Color.black
-                }
-            }
-            
-            // Action buttons overlay
-            VStack {
-                Spacer()
-                HStack(alignment: .bottom, spacing: 0) {
-                    // Video info (left side)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Button {
-                            print("DEBUG: Username tapped for: \(video.username ?? "unknown")")
-                            player?.pause()
-                            isPlaying = false
-                            
-                            if video.userId == Auth.auth().currentUser?.uid {
-                                // It's the current user: switch tab
-                                dismiss()
-                                tabSelection.wrappedValue = 3  // Profile tab
-                            } else {
-                                // For another user, set the state to push the profile view
-                                selectedUserId = video.userId
-                                pushUserProfile = true
-                            }
-                        } label: {
-                            Text("@\(video.username ?? "user")")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Text(video.caption)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .lineLimit(2)
+                                .onEnded { _ in
+                                    self.isDragging = false
+                                    if isActive {
+                                        player.play()
+                                    }
+                                }
+                        )
+                        .simultaneousGesture(
+                            TapGesture()
+                                .onEnded { _ in
+                                    if !pushUserProfile {
+                                        appState.isMuted.toggle()
+                                    }
+                                }
+                        )
+                } else if let thumbnailUrl = video.thumbnailUrl,
+                          let url = URL(string: thumbnailUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .clipped()
+                    } placeholder: {
+                        Color.black
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.bottom, 60)
+                }
+                
+                VStack(spacing: 0) {
+                    Spacer()
                     
-                    // Action buttons (right side)
-                    VStack(spacing: 20) {
-                        // Like Button
-                        Button {
-                            Task {
-                                await videoService.toggleLike(for: video.id)
-                                if let updatedVideo = videoService.videos[video.id] {
-                                    video = updatedVideo
+                    // Action buttons and info
+                    HStack(alignment: .bottom, spacing: 0) {
+                        // Video info (left side)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button {
+                                print("DEBUG: Username tapped for: \(video.username ?? "unknown")")
+                                player?.pause()
+                                isPlaying = false
+                                
+                                if video.userId == Auth.auth().currentUser?.uid {
+                                    // It's the current user: switch tab
+                                    dismiss()
+                                    tabSelection.wrappedValue = 3  // Profile tab
+                                } else {
+                                    // For another user, set the state to push the profile view
+                                    selectedUserId = video.userId
+                                    pushUserProfile = true
+                                }
+                            } label: {
+                                Text("@\(video.username ?? "user")")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Text(video.caption)
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.bottom, 60)
+                        
+                        // Action buttons (right side)
+                        VStack(spacing: 20) {
+                            // Like Button
+                            Button {
+                                Task {
+                                    await videoService.toggleLike(for: video.id)
+                                    if let updatedVideo = videoService.videos[video.id] {
+                                        video = updatedVideo
+                                    }
+                                }
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: video.isLiked ? "heart.fill" : "heart")
+                                        .font(.title)
+                                        .foregroundColor(video.isLiked ? .red : .white)
+                                        .scaleEffect(video.isLiked ? 1.2 : 1.0)
+                                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isLiked)
+                                    Text("\(video.likes)")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
                                 }
                             }
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: video.isLiked ? "heart.fill" : "heart")
+                            
+                            // Comment Button
+                            Button {
+                                showingComments = true
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "bubble.right")
+                                        .font(.title)
+                                        .foregroundColor(.white)
+                                    CommentsCountBadgeView(videoId: video.id)
+                                }
+                            }
+                            
+                            // Bookmark Button
+                            Button {
+                                Task {
+                                    // Create a local copy
+                                    var videoToUpdate = video
+                                    await bookmarkService.toggleBookmark(for: &videoToUpdate)
+                                    // Update the binding after the async operation
+                                    video = videoToUpdate
+                                }
+                            } label: {
+                                Image(systemName: bookmarkService.bookmarkedVideoIds.contains(video.id) ? "bookmark.fill" : "bookmark")
                                     .font(.title)
-                                    .foregroundColor(video.isLiked ? .red : .white)
-                                    .scaleEffect(video.isLiked ? 1.2 : 1.0)
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isLiked)
-                                Text("\(video.likes)")
-                                    .font(.caption)
                                     .foregroundColor(.white)
+                                    .scaleEffect(video.isBookmarked ? 1.2 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isBookmarked)
                             }
-                        }
-                        
-                        // Comment Button
-                        Button {
-                            showingComments = true
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "bubble.right")
-                                    .font(.title)
-                                    .foregroundColor(.white)
-                                CommentsCountBadgeView(videoId: video.id)
-                            }
-                        }
-                        
-                        // Bookmark Button
-                        Button {
-                            Task {
-                                // Create a local copy
-                                var videoToUpdate = video
-                                await bookmarkService.toggleBookmark(for: &videoToUpdate)
-                                // Update the binding after the async operation
-                                video = videoToUpdate
-                            }
-                        } label: {
-                            Image(systemName: bookmarkService.bookmarkedVideoIds.contains(video.id) ? "bookmark.fill" : "bookmark")
-                                .font(.title)
+                            
+                            // Sound indicator
+                            Image(systemName: appState.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .font(.title2)
                                 .foregroundColor(.white)
-                                .scaleEffect(video.isBookmarked ? 1.2 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: video.isBookmarked)
+                                .padding(.top, 10)
                         }
-                        
-                        // Sound indicator
-                        Image(systemName: appState.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                            .padding(.top, 10)
+                        .padding()
                     }
-                    .padding()
+                    .padding(.bottom, 8)
+                    
+                    // Progress bar at the bottom
+                    VideoProgressBar(
+                        progress: progress,
+                        duration: duration,
+                        isDragging: isDragging,
+                        dragProgress: dragProgress,
+                        onDragChanged: { _ in },
+                        onDragEnded: { }
+                    )
                 }
+                .padding(.bottom, geometry.safeAreaInsets.bottom)
             }
+            .edgesIgnoringSafeArea(.all)
         }
         .sheet(isPresented: $showingComments) {
             CommentsView(viewModel: CommentsViewModel(videoId: video.id))
@@ -332,10 +413,14 @@ struct VideoContent: View {
             }
         }
         .onDisappear {
+            if let timeObserver = timeObserver {
+                player?.removeTimeObserver(timeObserver)
+            }
             player?.pause()
             player = nil
             isPlaying = false
             videoService.removeListener(videoId: video.id)
+            timeObserver = nil
         }
         .onChange(of: appState.isMuted) { _, isMuted in
             player?.isMuted = isMuted
@@ -396,6 +481,8 @@ struct VideoContent: View {
                                 // Start playing once ready
                                 self.player?.play()
                                 self.isPlaying = true
+                                // Set up progress tracking after player is ready
+                                self.setupProgressTracking()
                             }
                         }
                     } catch {
@@ -403,9 +490,11 @@ struct VideoContent: View {
                     }
                 }
             }
+        } else {
+            player?.play()
+            isPlaying = true
+            setupProgressTracking()
         }
-        player?.play()
-        isPlaying = true
     }
 }
 
