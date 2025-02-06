@@ -323,14 +323,16 @@ struct VideoContent: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             
-                            Text(video.caption)
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .lineLimit(2)
+                            if !video.caption.isEmpty {
+                                Text(video.caption)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .lineLimit(2)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
-                        .padding(.bottom, 60)
+                        .padding(.bottom, 10)
                         
                         // Action buttons (right side)
                         VStack(spacing: 20) {
