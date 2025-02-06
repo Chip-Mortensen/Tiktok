@@ -123,7 +123,9 @@ class FirestoreService {
             },
             "timestamp": FieldValue.serverTimestamp(),
             "thumbnailUrl": video.thumbnailUrl as Any,
-            "m3u8Url": video.m3u8Url as Any
+            "m3u8Url": video.m3u8Url as Any,
+            "segments": [], // Initialize empty segments array
+            "analysisStatus": VideoModel.VideoAnalysisStatus.pending.rawValue // Set initial analysis status
         ]
         
         // Update the videos collection using the video.id as the document ID
@@ -214,6 +216,19 @@ class FirestoreService {
                 )
             } ?? []
             
+            // Parse segments
+            let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData in
+                return VideoSegment(
+                    startTime: segmentData["startTime"] as? Double ?? 0,
+                    endTime: segmentData["endTime"] as? Double ?? 0,
+                    labels: segmentData["labels"] as? [String] ?? [],
+                    confidence: segmentData["confidence"] as? Double ?? 0
+                )
+            }
+            
+            // Parse analysis status
+            let analysisStatus = VideoModel.VideoAnalysisStatus(rawValue: data["analysisStatus"] as? String ?? "pending") ?? .pending
+            
             let video = VideoModel(
                 id: document.documentID,
                 userId: userId,
@@ -225,7 +240,9 @@ class FirestoreService {
                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
                 thumbnailUrl: data["thumbnailUrl"] as? String,
                 m3u8Url: data["m3u8Url"] as? String,
-                commentsCount: data["commentsCount"] as? Int ?? 0
+                commentsCount: data["commentsCount"] as? Int ?? 0,
+                segments: segments,
+                analysisStatus: analysisStatus
             )
             videos.append(video)
         }

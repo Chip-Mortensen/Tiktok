@@ -1,5 +1,12 @@
 import Foundation
 
+struct VideoSegment: Codable, Hashable {
+    let startTime: Double
+    let endTime: Double
+    let labels: [String]
+    let confidence: Double
+}
+
 struct VideoModel: Identifiable, Codable, Hashable {
     let id: String
     let userId: String
@@ -12,10 +19,19 @@ struct VideoModel: Identifiable, Codable, Hashable {
     let timestamp: Date
     var thumbnailUrl: String?
     var m3u8Url: String?
+    var segments: [VideoSegment]?
+    var analysisStatus: VideoAnalysisStatus
     
     // Not persisted to Firestore, used for UI state
     var isLiked: Bool = false
     var isBookmarked: Bool = false
+    
+    enum VideoAnalysisStatus: String, Codable {
+        case pending
+        case inProgress
+        case completed
+        case failed
+    }
     
     struct Comment: Identifiable, Codable, Hashable {
         let id: String
@@ -46,7 +62,9 @@ struct VideoModel: Identifiable, Codable, Hashable {
          m3u8Url: String? = nil,
          isLiked: Bool = false,
          isBookmarked: Bool = false,
-         commentsCount: Int = 0) {
+         commentsCount: Int = 0,
+         segments: [VideoSegment]? = nil,
+         analysisStatus: VideoAnalysisStatus = .pending) {
         self.id = id
         self.userId = userId
         self.username = username
@@ -60,6 +78,8 @@ struct VideoModel: Identifiable, Codable, Hashable {
         self.isLiked = isLiked
         self.isBookmarked = isBookmarked
         self.commentsCount = commentsCount
+        self.segments = segments
+        self.analysisStatus = analysisStatus
     }
     
     // Mutating functions for state updates
