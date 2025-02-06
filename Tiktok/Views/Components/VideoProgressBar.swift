@@ -52,12 +52,23 @@ struct VideoProgressBar: View {
                         if let segments = segments {
                             ForEach(segments.indices, id: \.self) { index in
                                 let segment = segments[index]
-                                let segmentWidth = (segment.endTime - segment.startTime) / duration * geometry.size.width
+                                let segmentWidth = duration > 0 ? 
+                                    (segment.endTime - segment.startTime) / duration * geometry.size.width :
+                                    0
                                 
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.3))
-                                    .frame(width: segmentWidth, height: currentBarHeight)
-                                    .cornerRadius(currentBarHeight / 2)
+                                ZStack {
+                                    if segment.isFiller {
+                                        Rectangle()
+                                            .fill(Color.yellow.opacity(0.4))
+                                            .frame(width: max(0, segmentWidth), height: currentBarHeight)
+                                            .cornerRadius(currentBarHeight / 2)
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color.white.opacity(0.3))
+                                            .frame(width: segmentWidth, height: currentBarHeight)
+                                            .cornerRadius(currentBarHeight / 2)
+                                    }
+                                }
                             }
                         } else {
                             Rectangle()
@@ -79,7 +90,7 @@ struct VideoProgressBar: View {
                                 let fillWidth = segmentWidth * segmentProgress
                                 
                                 Rectangle()
-                                    .fill(segment.isFiller ? Color.gray : Color.blue)
+                                    .fill(segment.isFiller ? Color.yellow : Color.blue)
                                     .frame(width: fillWidth, height: currentBarHeight)
                                     .cornerRadius(currentBarHeight / 2)
                             }

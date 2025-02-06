@@ -234,6 +234,7 @@ struct VideoContent: View {
             object: player.currentItem,
             queue: .main
         ) { [weak player] _ in
+            smartSkipManager.resetSkipTracking()  // Reset when video loops
             player?.seek(to: .zero)
             player?.play()
         }
@@ -424,6 +425,7 @@ struct VideoContent: View {
                                 isPlaying = false
                             }
                             isDragging = true
+                            smartSkipManager.resetSkipTracking()  // Reset when user seeks
                             handleScrubbing(to: newProgress)
                         },
                         onDragEnded: {
