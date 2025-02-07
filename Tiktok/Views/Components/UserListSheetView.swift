@@ -22,7 +22,33 @@ struct UserListSheetView: View {
                         switch sheetType {
                         case .followers, .following:
                             ForEach(viewModel.users) { user in
-                                UserRowView(user: user)
+                                if let userId = user.id {
+                                    if userId == Auth.auth().currentUser?.uid {
+                                        Button {
+                                            dismiss()
+                                            // Small delay to ensure sheet is dismissed before tab switch
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
+                                            }
+                                        } label: {
+                                            UserRowView(user: user)
+                                        }
+                                    } else {
+                                        NavigationLink {
+                                            UserProfileView(userId: userId)
+                                                .navigationBarTitleDisplayMode(.inline)
+                                                .toolbar {
+                                                    ToolbarItem(placement: .navigationBarLeading) {
+                                                        Button("Back") {
+                                                            dismiss()
+                                                        }
+                                                    }
+                                                }
+                                        } label: {
+                                            UserRowView(user: user)
+                                        }
+                                    }
+                                }
                             }
                         case .likes:
                             ForEach(viewModel.likes) { like in

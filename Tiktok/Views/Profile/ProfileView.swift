@@ -9,6 +9,7 @@ struct ProfileView: View {
     @State private var bio = ""
     @State private var activeSheet: UserListSheetType?
     @EnvironmentObject private var bookmarkService: BookmarkService
+    @Environment(\.tabSelection) private var tabSelection
     
     var body: some View {
         NavigationStack {
@@ -173,6 +174,15 @@ struct ProfileView: View {
             }
             .task {
                 await viewModel.fetchUserData()
+                
+                // Set up notification observer for tab switching
+                NotificationCenter.default.addObserver(
+                    forName: NSNotification.Name("SwitchToProfileTab"),
+                    object: nil,
+                    queue: .main
+                ) { _ in
+                    tabSelection.wrappedValue = 3  // Switch to profile tab
+                }
             }
         }
     }

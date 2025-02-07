@@ -31,10 +31,6 @@ struct UserRowView: View {
             }
             
             Spacer()
-            
-            Image(systemName: "chevron.right")
-                .foregroundColor(.gray)
-                .font(.system(size: 14))
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
