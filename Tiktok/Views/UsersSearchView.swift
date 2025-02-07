@@ -4,6 +4,7 @@ import FirebaseAuth
 struct UsersSearchView: View {
     @StateObject private var viewModel = UsersSearchViewModel()
     @Environment(\.tabSelection) var tabSelection
+    @FocusState private var isSearchFieldFocused: Bool
     
     var body: some View {
         NavigationStack {
@@ -16,7 +17,8 @@ struct UsersSearchView: View {
                     },
                     onChange: {
                         viewModel.performSearch()
-                    }
+                    },
+                    focusBinding: $isSearchFieldFocused
                 )
                 
                 SearchResultsView(
@@ -29,6 +31,25 @@ struct UsersSearchView: View {
             .navigationTitle("Find Users")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .task {
+            // Monitor tab selection changes
+            if tabSelection.wrappedValue == 1 {
+                // Small delay to ensure view is ready
+                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                isSearchFieldFocused = true
+            }
+        }
+        .onChange(of: tabSelection.wrappedValue) { _, newValue in
+            if newValue == 1 {
+                // Small delay to ensure view is ready
+                Task {
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                    isSearchFieldFocused = true
+                }
+            } else {
+                isSearchFieldFocused = false
+            }
+        }
     }
 }
 
@@ -37,6 +58,7 @@ private struct SearchBarView: View {
     @Binding var searchQuery: String
     let onClear: () -> Void
     let onChange: () -> Void
+    let focusBinding: FocusState<Bool>.Binding
     
     var body: some View {
         HStack(spacing: 12) {
@@ -46,6 +68,7 @@ private struct SearchBarView: View {
             TextField("Search users", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .autocapitalization(.none)
+                .focused(focusBinding)
                 .onChange(of: searchQuery) { _, _ in
                     onChange()
                 }
