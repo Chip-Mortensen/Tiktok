@@ -9,7 +9,6 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const { encode } = require('gpt-3-encoder');
-require('dotenv').config();
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -89,11 +88,10 @@ async function transcribeAudioChunk(chunkPath, startTime) {
 }
 
 async function createSlidingWindows(text, words, maxTokens = 100000, overlapTokens = 20000) {
-  // Use actual GPT-3 tokenizer for accurate counts
   const getTokenCount = (text) => encode(text).length;
 
   try {
-    // Calculate token counts for fixed content
+    // Calculate fixed overhead
     const systemPrompt = `You are a video segmentation AI. Given the transcript below with word-level timestamps, extract major topical segments and identify filler content. This is a portion of a X second video, from Y to Z. Use the word timestamps to create accurate segment boundaries.
 
 Filler content includes:
@@ -107,117 +105,104 @@ Filler content includes:
     const SCHEMA_TOKENS = 70;
     const SYSTEM_PROMPT_TOKENS = getTokenCount(systemPrompt);
     const JSON_STRUCTURE_TOKENS = 100;
-    const TIMESTAMP_TOKENS_PER_WORD = 12;
     const SAFETY_MARGIN = 1000;
+    const BASE_OVERHEAD = SYSTEM_PROMPT_TOKENS + SCHEMA_TOKENS + JSON_STRUCTURE_TOKENS + SAFETY_MARGIN;
 
-    const OVERHEAD_TOKENS = SYSTEM_PROMPT_TOKENS + SCHEMA_TOKENS + JSON_STRUCTURE_TOKENS + SAFETY_MARGIN;
-    const effectiveMaxTokens = Math.floor((maxTokens - OVERHEAD_TOKENS) * 0.6);
+    // Calculate per-word token overhead for timestamps JSON structure
+    const sampleTimestamps = JSON.stringify([
+      {
+        word: words[0].word,
+        start: words[0].start,
+        end: words[0].end,
+      },
+    ]);
+    const TOKENS_PER_TIMESTAMP = getTokenCount(sampleTimestamps) / 1;
 
-    console.log(`Token budget:
+    // Target size calculation
+    const TARGET_WINDOW_SIZE = Math.floor((maxTokens - BASE_OVERHEAD) * 0.4); // Use 40% for text
+    const MAX_WORDS_PER_WINDOW = Math.floor(TARGET_WINDOW_SIZE / (1 + TOKENS_PER_TIMESTAMP));
+
+    console.log(`Token budget analysis:
       Max tokens: ${maxTokens}
-      Overhead: ${OVERHEAD_TOKENS}
-      - System prompt: ${SYSTEM_PROMPT_TOKENS}
-      - Schema: ${SCHEMA_TOKENS}
-      - JSON structure: ${JSON_STRUCTURE_TOKENS}
-      - Safety margin: ${SAFETY_MARGIN}
-      Effective max: ${effectiveMaxTokens}
+      Base overhead: ${BASE_OVERHEAD}
+      Tokens per timestamp: ${TOKENS_PER_TIMESTAMP}
+      Target window size: ${TARGET_WINDOW_SIZE}
+      Max words per window: ${MAX_WORDS_PER_WINDOW}
     `);
-
-    const effectiveOverlapTokens = Math.min(overlapTokens, Math.floor(effectiveMaxTokens * 0.15));
 
     const windows = [];
     let startIndex = 0;
 
     while (startIndex < words.length) {
-      let windowText = '';
-      let windowWords = [];
-      let currentIndex = startIndex;
+      // Calculate how many words we can include
+      const remainingWords = words.length - startIndex;
+      const windowWordCount = Math.min(MAX_WORDS_PER_WINDOW, remainingWords);
 
-      // Build window up to effectiveMaxTokens
-      while (currentIndex < words.length) {
-        const nextWord = words[currentIndex].word;
-        const nextText = windowText + (currentIndex > startIndex ? ' ' : '') + nextWord;
-        const timestampTokens = (windowWords.length + 1) * TIMESTAMP_TOKENS_PER_WORD;
-        const totalTokens = getTokenCount(nextText) + timestampTokens + OVERHEAD_TOKENS;
-
-        if (totalTokens >= maxTokens * 0.95) {
-          break;
+      if (windowWordCount < 10) {
+        console.log('Remaining words too few, extending last window');
+        if (windows.length > 0) {
+          const lastWindow = windows[windows.length - 1];
+          lastWindow.words = lastWindow.words.concat(words.slice(startIndex));
+          lastWindow.text = lastWindow.words.map((w) => w.word).join(' ');
+          lastWindow.endTime = words[words.length - 1].end;
         }
-
-        windowText = nextText;
-        windowWords.push(words[currentIndex]);
-        currentIndex++;
+        break;
       }
 
-      // If we're not at the end, try to include overlap
-      if (currentIndex < words.length) {
-        let overlapText = '';
-        let overlapIndex = currentIndex;
+      // Create window
+      const windowWords = words.slice(startIndex, startIndex + windowWordCount);
+      const windowText = windowWords.map((w) => w.word).join(' ');
 
-        while (overlapIndex < words.length) {
-          const nextWord = words[overlapIndex].word;
-          const nextOverlap = overlapText + ' ' + nextWord;
-          const timestampTokens = (windowWords.length + 1) * TIMESTAMP_TOKENS_PER_WORD;
-          const totalTokens = getTokenCount(windowText + nextOverlap) + timestampTokens + OVERHEAD_TOKENS;
+      // Verify token count
+      const timestampTokens = windowWords.length * TOKENS_PER_TIMESTAMP;
+      const textTokens = getTokenCount(windowText);
+      const totalTokens = textTokens + timestampTokens + BASE_OVERHEAD;
 
-          if (totalTokens >= maxTokens * 0.95 || getTokenCount(nextOverlap) >= effectiveOverlapTokens) {
-            break;
-          }
-
-          overlapText = nextOverlap;
-          windowWords.push(words[overlapIndex]);
-          overlapIndex++;
-        }
-
-        if (overlapText) {
-          windowText += overlapText;
-        }
-      }
-
-      // Verify window size before adding
-      const timestampTokens = windowWords.length * TIMESTAMP_TOKENS_PER_WORD;
-      const totalTokens = getTokenCount(windowText) + timestampTokens + OVERHEAD_TOKENS;
-
-      console.log(`Window size check:
-        Text tokens: ${getTokenCount(windowText)}
+      console.log(`Window size verification:
+        Words: ${windowWords.length}
+        Text tokens: ${textTokens}
         Timestamp tokens: ${timestampTokens}
-        Overhead tokens: ${OVERHEAD_TOKENS}
         Total tokens: ${totalTokens}
         Limit: ${maxTokens}
-        Words: ${windowWords.length}
       `);
 
       if (totalTokens > maxTokens) {
-        throw new Error(`Window exceeds token limit: ${totalTokens} > ${maxTokens}`);
-      }
-
-      if (windowWords.length === 0) {
-        throw new Error(`Failed to create window starting at word index ${startIndex}`);
+        throw new Error(`Window exceeds token limit: ${totalTokens} > ${maxTokens}. This should not happen!`);
       }
 
       windows.push({
         text: windowText,
         words: windowWords,
-        startTime: words[startIndex].start,
+        startTime: windowWords[0].start,
         endTime: windowWords[windowWords.length - 1].end,
       });
 
-      // Move start to after the non-overlapping portion
-      const nonOverlapWords = Math.floor(windowWords.length * 0.85);
-      const nextStartIndex = startIndex + Math.max(1, Math.min(nonOverlapWords, words.length - startIndex - 1));
+      // Calculate overlap
+      const overlapWordCount = Math.min(
+        Math.floor(windowWordCount * 0.15), // 15% overlap
+        remainingWords - windowWordCount // Don't overlap beyond available words
+      );
 
-      if (nextStartIndex <= startIndex) {
-        throw new Error(`Window creation stuck at index ${startIndex}`);
-      }
-
-      startIndex = nextStartIndex;
+      // Advance to next window
+      startIndex += windowWordCount - overlapWordCount;
     }
 
-    console.log(`📊 Window stats: Created ${windows.length} windows`);
+    // Verify windows
+    console.log(`📊 Created ${windows.length} windows`);
     windows.forEach((w, i) => {
-      const timestampTokens = w.words.length * TIMESTAMP_TOKENS_PER_WORD;
-      const totalTokens = getTokenCount(w.text) + timestampTokens + OVERHEAD_TOKENS;
+      const timestampTokens = w.words.length * TOKENS_PER_TIMESTAMP;
+      const textTokens = getTokenCount(w.text);
+      const totalTokens = textTokens + timestampTokens + BASE_OVERHEAD;
       console.log(`Window ${i + 1}: ${Math.round(w.startTime)}s-${Math.round(w.endTime)}s, ${totalTokens} tokens, ${w.words.length} words`);
+
+      // Verify no gaps between windows
+      if (i > 0) {
+        const gap = w.startTime - windows[i - 1].endTime;
+        if (gap > 1) {
+          // 1 second tolerance
+          console.warn(`⚠️ Gap detected between windows ${i} and ${i + 1}: ${gap}s`);
+        }
+      }
     });
 
     return windows;
@@ -247,7 +232,7 @@ function validateSegments(segments, startTime, endTime) {
   });
 }
 
-async function segmentWindow(window, totalDuration, openaiApiKey, maxRetries = 3) {
+async function segmentWindow(window, totalDuration, maxRetries = 3) {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   let lastError = null;
 
@@ -312,7 +297,7 @@ Filler content includes:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiApiKey}`,
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify(segmentationPayload),
       });
@@ -549,7 +534,7 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
         console.log(`🎯 Processing window ${i + 1}/${windows.length} (${Math.round(window.startTime)}s-${Math.round(window.endTime)}s)`);
 
         try {
-          const windowSegments = await segmentWindow(window, duration, process.env.OPENAI_API_KEY);
+          const windowSegments = await segmentWindow(window, duration);
           allSegments = allSegments.concat(windowSegments);
           console.log(`✅ Window ${i + 1} complete: found ${windowSegments.length} segments`);
 
