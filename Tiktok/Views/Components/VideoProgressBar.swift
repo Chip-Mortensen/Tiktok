@@ -10,12 +10,11 @@ struct VideoProgressBar: View {
     let onDragEnded: () -> Void
     let segments: [VideoModel.Segment]?
     
-    // Constants for hit target
     private let progressBarHeight: CGFloat = 4
-    private let hitTargetHeight: CGFloat = 30  // Standard touch target size
-    private let segmentMarkerHeight: CGFloat = 8
-    private let progressBarDraggingHeight: CGFloat = 8  // Height when dragging
+    private let hitTargetHeight: CGFloat = 30
+    private let progressBarDraggingHeight: CGFloat = 8
     
+    // MARK: - Computed Properties
     private var currentProgress: Double {
         if duration <= 0 { return 0 }
         if isDragging { return dragProgress }
@@ -26,87 +25,113 @@ struct VideoProgressBar: View {
         isDragging ? progressBarDraggingHeight : progressBarHeight
     }
     
+    // MARK: - View Body
     var body: some View {
         GeometryReader { geometry in
-            // Hit target area with progress bar
-            ZStack(alignment: .bottom) {
-                // Hit target
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let progress = max(0, min(1, value.location.x / geometry.size.width))
-                                onDragChanged(progress)
-                            }
-                            .onEnded { _ in
-                                onDragEnded()
-                            }
-                    )
-                
-                // Progress bar container
-                ZStack(alignment: .leading) {
-                    // Background track with segment breaks
-                    HStack(spacing: 4) {
-                        if let segments = segments {
-                            ForEach(segments.indices, id: \.self) { index in
-                                let segment = segments[index]
-                                let segmentWidth = duration > 0 ? 
-                                    (segment.endTime - segment.startTime) / duration * geometry.size.width :
-                                    0
+            let width = geometry.size.width
+            
+            ZStack(alignment: .leading) {
+                // Background track with integrated progress
+                if let segments = segments {
+                    HStack(spacing: 0) {
+                        ForEach(segments.indices, id: \.self) { index in
+                            let segment = segments[index]
+                            let isFirst = index == 0
+                            let isLast = index == segments.count - 1
+                            let segmentWidth = calculateSegmentWidth(segment: segment, totalWidth: width)
+                            
+                            ZStack(alignment: .leading) {
+                                // Background
+                                Rectangle()
+                                    .fill(segment.isFiller ? Color.yellow.opacity(0.4) : Color.white.opacity(0.3))
                                 
-                                ZStack {
-                                    if segment.isFiller {
-                                        Rectangle()
-                                            .fill(Color.yellow.opacity(0.4))
-                                            .frame(width: max(0, segmentWidth), height: currentBarHeight)
-                                            .cornerRadius(currentBarHeight / 2)
-                                    } else {
-                                        Rectangle()
-                                            .fill(Color.white.opacity(0.3))
-                                            .frame(width: segmentWidth, height: currentBarHeight)
-                                            .cornerRadius(currentBarHeight / 2)
-                                    }
+                                // Progress fill
+                                if let fillWidth = calculateSegmentFillWidth(segment: segment, totalWidth: width) {
+                                    Rectangle()
+                                        .fill(segment.isFiller ? Color.yellow : Color.blue)
+                                        .frame(width: fillWidth)
                                 }
                             }
-                        } else {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.3))
-                                .frame(height: currentBarHeight)
-                                .frame(maxWidth: .infinity)
-                                .cornerRadius(currentBarHeight / 2)
+                            .frame(width: segmentWidth, height: currentBarHeight)
+                            .cornerRadius(currentBarHeight / 2)
+                            .mask(
+                                HStack(spacing: 0) {
+                                    if isFirst {
+                                        Rectangle()
+                                            .frame(width: currentBarHeight)
+                                        Rectangle()
+                                            .frame(maxWidth: .infinity)
+                                    } else if isLast {
+                                        Rectangle()
+                                            .frame(maxWidth: .infinity)
+                                        Rectangle()
+                                            .frame(width: currentBarHeight)
+                                    } else {
+                                        Rectangle()
+                                    }
+                                }
+                            )
                         }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: isDragging)
-                    
-                    // Progress fill
-                    HStack(spacing: 4) {
-                        if let segments = segments {
-                            ForEach(segments.indices, id: \.self) { index in
-                                let segment = segments[index]
-                                let segmentWidth = (segment.endTime - segment.startTime) / duration * geometry.size.width
-                                let segmentProgress = max(0, min(1, (currentProgress * duration - segment.startTime) / (segment.endTime - segment.startTime)))
-                                let fillWidth = segmentWidth * segmentProgress
-                                
-                                Rectangle()
-                                    .fill(segment.isFiller ? Color.yellow : Color.blue)
-                                    .frame(width: fillWidth, height: currentBarHeight)
-                                    .cornerRadius(currentBarHeight / 2)
-                            }
-                        } else {
-                            Rectangle()
-                                .fill(Color.blue)
-                                .frame(width: max(0, min(geometry.size.width, geometry.size.width * currentProgress)), height: currentBarHeight)
-                                .cornerRadius(currentBarHeight / 2)
-                        }
+                } else {
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(height: currentBarHeight)
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(width: width * currentProgress, height: currentBarHeight)
                     }
-                    .animation(.easeInOut(duration: 0.2), value: isDragging)
+                    .cornerRadius(currentBarHeight / 2)
                 }
             }
+            .frame(height: currentBarHeight)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let rawProgress = value.location.x / width
+                        let boundedProgress = min(1, max(0, rawProgress))
+                        onDragChanged(boundedProgress)
+                    }
+                    .onEnded { _ in
+                        handleDragEnd()
+                    }
+            )
         }
         .frame(height: hitTargetHeight)
-        .padding(.bottom, 2)
+    }
+    
+    // MARK: - Helper Functions
+    private func calculateSegmentWidth(segment: VideoModel.Segment, totalWidth: CGFloat) -> CGFloat {
+        guard duration > 0 else { return 0 }
+        let segmentDuration = max(0, segment.endTime - segment.startTime)
+        let segmentWidth = CGFloat(segmentDuration / duration) * totalWidth
+        return max(0, segmentWidth)  // Ensure non-negative width
+    }
+    
+    private func calculateSegmentFillWidth(segment: VideoModel.Segment, totalWidth: CGFloat) -> CGFloat? {
+        guard duration > 0 else { return nil }
+        let progressTime = currentProgress * duration
+        
+        // If progress hasn't reached this segment
+        if progressTime <= segment.startTime {
+            return nil
+        }
+        
+        // If progress is within this segment
+        if progressTime < segment.endTime {
+            let segmentProgress = (progressTime - segment.startTime) / (segment.endTime - segment.startTime)
+            return calculateSegmentWidth(segment: segment, totalWidth: totalWidth) * CGFloat(segmentProgress)
+        }
+        
+        // If progress has passed this segment
+        return calculateSegmentWidth(segment: segment, totalWidth: totalWidth)
+    }
+    
+    private func handleDragEnd() {
+        onDragEnded()
     }
 }
 
