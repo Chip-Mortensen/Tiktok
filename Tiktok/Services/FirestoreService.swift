@@ -968,4 +968,85 @@ class FirestoreService {
         print("DEBUG: Returning \(sortedLikes.count) sorted likes")
         return sortedLikes
     }
+    
+    func fetchFeedVideos(limit: Int = 10) async throws -> [VideoModel] {
+        print("Fetching feed videos from Firestore...")
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return [] }
+        
+        // Get list of users we're following
+        let followingSnapshot = try await db.collection("users")
+            .document(currentUserId)
+            .collection("userFollowing")
+            .getDocuments()
+            
+        // Create array of userIds including current user and followed users
+        var userIds = followingSnapshot.documents.map { $0.documentID }
+        userIds.append(currentUserId)  // Add current user's ID
+        
+        print("DEBUG: Fetching videos for users: \(userIds)")
+        
+        // Fetch videos from these users
+        let snapshot = try await db.collection("videos")
+            .whereField("userId", in: userIds)
+            .order(by: "timestamp", descending: true)  // Changed to descending for newest first
+            .limit(to: limit)
+            .getDocuments()
+        
+        print("Found \(snapshot.documents.count) videos in feed")
+        
+        var videos: [VideoModel] = []
+        for document in snapshot.documents {
+            let data = document.data()
+            let userId = data["userId"] as? String ?? ""
+            print("DEBUG: Processing video \(document.documentID) from user \(userId)")
+            
+            // Fetch username
+            let username = try await getUsernameForUserId(userId)
+            
+            // Parse segments if available
+            let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData -> VideoModel.Segment? in
+                guard let startTime = segmentData["startTime"] as? Double,
+                      let endTime = segmentData["endTime"] as? Double,
+                      let topic = segmentData["topic"] as? String,
+                      let summary = segmentData["summary"] as? String else {
+                    print("⚠️ Invalid segment data:", segmentData)
+                    return nil
+                }
+                return VideoModel.Segment(
+                    startTime: startTime,
+                    endTime: endTime,
+                    topic: topic,
+                    summary: summary,
+                    isFiller: segmentData["isFiller"] as? Bool ?? false
+                )
+            }
+            
+            let comments = (data["comments"] as? [[String: Any]])?.compactMap { commentData in
+                return VideoModel.Comment(
+                    id: commentData["id"] as? String ?? UUID().uuidString,
+                    userId: commentData["userId"] as? String ?? "",
+                    text: commentData["text"] as? String ?? "",
+                    timestamp: (commentData["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                )
+            } ?? []
+            
+            let video = VideoModel(
+                id: document.documentID,
+                userId: userId,
+                username: username,
+                videoUrl: data["videoUrl"] as? String ?? "",
+                caption: data["caption"] as? String ?? "",
+                likes: data["likes"] as? Int ?? 0,
+                comments: comments,
+                timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
+                thumbnailUrl: data["thumbnailUrl"] as? String,
+                m3u8Url: data["m3u8Url"] as? String,
+                commentsCount: data["commentsCount"] as? Int ?? 0,
+                segments: segments
+            )
+            videos.append(video)
+        }
+        
+        return videos
+    }
 } 

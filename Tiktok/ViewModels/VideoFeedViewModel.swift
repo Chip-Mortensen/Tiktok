@@ -17,7 +17,7 @@ class VideoFeedViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
-            videos = try await firestoreService.fetchVideos()
+            videos = try await firestoreService.fetchFeedVideos()
             // Check like status for each video
             if let currentUserId = Auth.auth().currentUser?.uid {
                 for i in 0..<videos.count {

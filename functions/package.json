@@ -20,6 +20,7 @@
     "firebase-functions": "^6.3.1",
     "fluent-ffmpeg": "^2.1.2",
     "form-data": "^4.0.1",
+    "gpt-3-encoder": "^1.1.4",
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
