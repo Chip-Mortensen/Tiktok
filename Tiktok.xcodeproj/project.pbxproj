@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D43BD7A22D55A4B900FA3FA5 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = D43BD7A12D55A4B900FA3FA5 /* GoogleSignIn */; };
+		D43BD7A42D55A4B900FA3FA5 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D43BD7A32D55A4B900FA3FA5 /* GoogleSignInSwift */; };
 		D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = D445E5EF2D51438800695987 /* FirebaseAuth */; };
 		D445E6102D51687300695987 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = D445E60F2D51687300695987 /* FirebaseStorage */; };
 		D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = D445E6112D51689500695987 /* FirebaseFirestore */; };
@@ -42,7 +44,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D43BD7A42D55A4B900FA3FA5 /* GoogleSignInSwift in Frameworks */,
 				D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */,
+				D43BD7A22D55A4B900FA3FA5 /* GoogleSignIn in Frameworks */,
 				D445E6102D51687300695987 /* FirebaseStorage in Frameworks */,
 				D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */,
 			);
@@ -98,6 +102,8 @@
 				D445E5EF2D51438800695987 /* FirebaseAuth */,
 				D445E60F2D51687300695987 /* FirebaseStorage */,
 				D445E6112D51689500695987 /* FirebaseFirestore */,
+				D43BD7A12D55A4B900FA3FA5 /* GoogleSignIn */,
+				D43BD7A32D55A4B900FA3FA5 /* GoogleSignInSwift */,
 			);
 			productName = Tiktok;
 			productReference = D445E5DB2D51335300695987 /* Tiktok.app */;
@@ -129,6 +135,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				D43BD7A02D55A4B900FA3FA5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D445E5DC2D51335300695987 /* Products */;
@@ -292,6 +299,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Tiktok/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Access to your camera is needed to record videos";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Access to your photo library is needed to upload videos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -322,6 +331,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Tiktok/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Access to your camera is needed to record videos";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Access to your photo library is needed to upload videos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -364,6 +375,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		D43BD7A02D55A4B900FA3FA5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 		D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -375,6 +394,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D43BD7A12D55A4B900FA3FA5 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D43BD7A02D55A4B900FA3FA5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		D43BD7A32D55A4B900FA3FA5 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D43BD7A02D55A4B900FA3FA5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
 		D445E5EF2D51438800695987 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

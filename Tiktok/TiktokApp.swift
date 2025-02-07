@@ -8,6 +8,7 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAuth
+import GoogleSignIn
 
 @main
 struct TiktokApp: App {
@@ -18,6 +19,10 @@ struct TiktokApp: App {
     
     init() {
         FirebaseApp.configure()
+        
+        // Configure Google Sign In
+        guard let clientId = FirebaseApp.app()?.options.clientID else { return }
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
     }
     
     var body: some Scene {
@@ -36,6 +41,9 @@ struct TiktokApp: App {
                         .environmentObject(videoService)
                         .environmentObject(authService)
                 }
+            }
+            .onOpenURL { url in
+                GIDSignIn.sharedInstance.handle(url)
             }
         }
     }

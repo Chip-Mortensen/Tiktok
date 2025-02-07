@@ -1,14 +1,17 @@
 import Foundation
 import FirebaseAuth
 import Combine
+import GoogleSignIn
 
 @MainActor
 class AuthViewModel: ObservableObject {
     @Published var user: UserModel?
     @Published var isAuthenticated = false
     @Published var error: String?
+    @Published var isLoading = false
     
     private let firestoreService = FirestoreService.shared
+    private let authService = AuthService()
     private var _authStateHandler: AuthStateDidChangeListenerHandle?
     
     init() {
@@ -40,6 +43,19 @@ class AuthViewModel: ObservableObject {
     deinit {
         if let handler = _authStateHandler {
             Auth.auth().removeStateDidChangeListener(handler)
+        }
+    }
+    
+    func signInWithGoogle() async {
+        isLoading = true
+        error = nil
+        
+        do {
+            try await authService.signInWithGoogle()
+            isLoading = false
+        } catch {
+            self.error = error.localizedDescription
+            isLoading = false
         }
     }
     
@@ -98,6 +114,9 @@ class AuthViewModel: ObservableObject {
     func signOut() {
         do {
             try Auth.auth().signOut()
+            // Also sign out from Google
+            GIDSignIn.sharedInstance.signOut()
+            
             self.user = nil
             self.isAuthenticated = false
         } catch {
