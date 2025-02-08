@@ -177,32 +177,20 @@ Filler content includes:
         endTime: windowWords[windowWords.length - 1].end,
       });
 
-      // Calculate overlap
+      // Calculate overlap - use more overlap for better context
       const overlapWordCount = Math.min(
-        Math.floor(windowWordCount * 0.15), // 15% overlap
-        remainingWords - windowWordCount // Don't overlap beyond available words
+        Math.floor(windowWordCount * 0.3), // 30% overlap for better context
+        remainingWords - windowWordCount
       );
 
       // Advance to next window
       startIndex += windowWordCount - overlapWordCount;
     }
 
-    // Verify windows
+    // Log window information
     console.log(`📊 Created ${windows.length} windows`);
     windows.forEach((w, i) => {
-      const timestampTokens = w.words.length * TOKENS_PER_TIMESTAMP;
-      const textTokens = getTokenCount(w.text);
-      const totalTokens = textTokens + timestampTokens + BASE_OVERHEAD;
-      console.log(`Window ${i + 1}: ${Math.round(w.startTime)}s-${Math.round(w.endTime)}s, ${totalTokens} tokens, ${w.words.length} words`);
-
-      // Verify no gaps between windows
-      if (i > 0) {
-        const gap = w.startTime - windows[i - 1].endTime;
-        if (gap > 1) {
-          // 1 second tolerance
-          console.warn(`⚠️ Gap detected between windows ${i} and ${i + 1}: ${gap}s`);
-        }
-      }
+      console.log(`Window ${i + 1}: ${Math.round(w.startTime)}s-${Math.round(w.endTime)}s, ${w.words.length} words`);
     });
 
     return windows;
@@ -212,197 +200,128 @@ Filler content includes:
   }
 }
 
-// Add segment validation function
-function validateSegments(segments, startTime, endTime) {
-  return segments.filter((segment) => {
-    // Check if timestamps are numbers and within bounds
-    if (typeof segment.startTime !== 'number' || typeof segment.endTime !== 'number') {
-      console.warn('❌ Invalid segment timestamps:', segment);
-      return false;
-    }
-    if (segment.startTime < startTime || segment.endTime > endTime) {
-      console.warn('❌ Segment out of bounds:', segment);
-      return false;
-    }
-    if (segment.startTime >= segment.endTime) {
-      console.warn('❌ Invalid segment duration:', segment);
-      return false;
-    }
-    return true;
-  });
-}
+async function optimizeSegments(segments, totalDuration) {
+  const optimizationPayload = {
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert at analyzing video content and creating meaningful, well-structured segments. Your task is to optimize these segments into cohesive, logical sections while maintaining precise timing.
 
-async function segmentWindow(window, totalDuration, maxRetries = 3) {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  let lastError = null;
+Key Requirements:
+1. Create end-to-end coverage with no gaps in timestamps
+2. Combine segments that form part of a continuous discussion or theme
+3. Handle advertisements and promotional content:
+   - Maintain precise start/end times for ads
+   - Keep them as separate segments
+   - Mark them as filler content
+4. Content Guidelines:
+   - Group related consecutive topics into larger cohesive segments
+   - Preserve natural topic flow and transitions
+   - Keep contextual discussions together
+   - Only split when there's a clear topic change
+5. Filler Identification:
+   - Mark as filler:
+     * Advertisements and sponsorships
+     * Self-promotion segments
+     * Completely off-topic content
+   - Do NOT mark as filler:
+     * Topic transitions
+     * Background context
+     * Related examples or anecdotes
+     * Casual conversation that adds value
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const segmentationPayload = {
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a video segmentation AI. Given the transcript below with word-level timestamps, extract major topical segments and identify filler content. This is a portion of a ${Math.round(
-              totalDuration
-            )} second video, from ${Math.round(window.startTime)}s to ${Math.round(
-              window.endTime
-            )}s. Use the word timestamps to create accurate segment boundaries.
+The video is ${Math.round(
+          totalDuration
+        )} seconds long. You must create segments that cover the entire duration from 0 to ${totalDuration} seconds with no gaps or overlaps.`,
+      },
+      {
+        role: 'user',
+        content: `Please analyze and optimize these segments. Create cohesive sections while maintaining precise timing.
 
-Filler content includes:
-- Repetitive or redundant explanations
-- Off-topic tangents
-- Excessive introductions or outros
-- "Um"s, "Ah"s, and verbal pauses
-- Unnecessary small talk
-- Content that doesn't contribute to the main message`,
-          },
-          {
-            role: 'user',
-            content: `Transcript portion: ${window.text}\n\nWord timestamps: ${JSON.stringify(window.words)}`,
-          },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'chunkedTopics',
-            schema: {
-              type: 'object',
-              properties: {
-                segments: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      startTime: { type: 'number' },
-                      endTime: { type: 'number' },
-                      topic: { type: 'string' },
-                      summary: { type: 'string' },
-                      isFiller: { type: 'boolean' },
-                    },
-                    required: ['startTime', 'endTime', 'topic', 'summary', 'isFiller'],
-                    additionalProperties: false,
-                  },
+Current segments:
+${JSON.stringify(segments, null, 2)}
+
+Requirements:
+1. Each segment must connect exactly to the next (endTime of one = startTime of next)
+2. First segment must start at 0, last segment must end at ${totalDuration}
+3. Maintain precise timestamps for advertisements
+4. Combine related topics into larger, meaningful segments
+5. Ensure natural content flow
+6. Handle any overlapping segments by choosing the most appropriate boundaries
+
+Return the optimized segments in the same JSON format.`,
+      },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'optimizedSegments',
+        schema: {
+          type: 'object',
+          properties: {
+            segments: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  startTime: { type: 'number' },
+                  endTime: { type: 'number' },
+                  topic: { type: 'string' },
+                  summary: { type: 'string' },
+                  isFiller: { type: 'boolean' },
                 },
+                required: ['startTime', 'endTime', 'topic', 'summary', 'isFiller'],
+                additionalProperties: false,
               },
-              required: ['segments'],
-              additionalProperties: false,
             },
-            strict: true,
           },
+          required: ['segments'],
+          additionalProperties: false,
         },
-      };
+        strict: true,
+      },
+    },
+  };
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify(segmentationPayload),
-      });
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(optimizationPayload),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        if (response.status === 429 || response.status >= 500) {
-          console.log(`Attempt ${attempt}: Rate limit or server error, retrying in ${attempt * 2}s...`);
-          await delay(attempt * 2000);
-          continue;
-        }
-        throw new Error(`Segmentation failed: ${errorText}`);
-      }
-
-      const result = await response.json();
-      if (!result.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response format from GPT-4o-mini');
-      }
-
-      const segments = JSON.parse(result.choices[0].message.content).segments;
-      if (!Array.isArray(segments)) {
-        throw new Error('Invalid segments format in response');
-      }
-
-      // Validate segments
-      const validSegments = validateSegments(segments, window.startTime, window.endTime);
-      if (validSegments.length === 0) {
-        throw new Error('No valid segments found in response');
-      }
-      if (validSegments.length < segments.length) {
-        console.warn(`⚠️ Filtered out ${segments.length - validSegments.length} invalid segments`);
-      }
-
-      return validSegments;
-    } catch (error) {
-      lastError = error;
-      if (attempt === maxRetries) {
-        console.error(`All ${maxRetries} attempts failed for window ${Math.round(window.startTime)}s-${Math.round(window.endTime)}s`);
-        throw lastError;
-      }
-      console.log(`Attempt ${attempt} failed, retrying in ${attempt * 2}s...`);
-      await delay(attempt * 2000);
+    if (!response.ok) {
+      throw new Error(`Optimization failed: ${await response.text()}`);
     }
-  }
 
-  // This should never be reached due to the throw above, but TypeScript will be happier
-  throw lastError || new Error('Segmentation failed with no error details');
-}
+    const result = await response.json();
+    const optimizedSegments = JSON.parse(result.choices[0].message.content).segments;
 
-function mergeOverlappingSegments(allSegments) {
-  if (allSegments.length === 0) return [];
+    // Validate the optimized segments cover the full duration
+    const firstSegment = optimizedSegments[0];
+    const lastSegment = optimizedSegments[optimizedSegments.length - 1];
 
-  // Sort segments by start time
-  const sorted = allSegments.sort((a, b) => a.startTime - b.startTime);
-  const merged = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const previous = merged[merged.length - 1];
-
-    // Check for overlap
-    if (current.startTime <= previous.endTime + 2) {
-      // 2-second tolerance
-      // If topics are similar or one contains the other
-      if (current.topic.includes(previous.topic) || previous.topic.includes(current.topic) || levenshteinDistance(current.topic, previous.topic) < 5) {
-        // Merge segments
-        previous.endTime = Math.max(previous.endTime, current.endTime);
-        previous.summary = previous.summary + ' ' + current.summary;
-        previous.isFiller = previous.isFiller && current.isFiller;
-      } else {
-        // Topics are different, adjust boundary to midpoint
-        const midpoint = (previous.endTime + current.startTime) / 2;
-        previous.endTime = midpoint;
-        current.startTime = midpoint;
-        merged.push(current);
-      }
-    } else {
-      merged.push(current);
+    if (!firstSegment || !lastSegment) {
+      throw new Error('Optimization returned no segments');
     }
-  }
 
-  return merged;
-}
-
-function levenshteinDistance(str1, str2) {
-  const m = str1.length;
-  const n = str2.length;
-  const dp = Array(m + 1)
-    .fill()
-    .map(() => Array(n + 1).fill(0));
-
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
-      } else {
-        dp[i][j] = Math.min(dp[i - 1][j - 1] + 1, dp[i - 1][j] + 1, dp[i][j - 1] + 1);
-      }
+    if (firstSegment.startTime !== 0) {
+      throw new Error(`First segment starts at ${firstSegment.startTime} instead of 0`);
     }
-  }
 
-  return dp[m][n];
+    if (Math.abs(lastSegment.endTime - totalDuration) > 1) {
+      throw new Error(`Last segment ends at ${lastSegment.endTime} instead of ${totalDuration}`);
+    }
+
+    return optimizedSegments;
+  } catch (error) {
+    console.error('Error during segment optimization:', error);
+    throw error; // Propagate the error instead of returning potentially invalid segments
+  }
 }
 
 exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
@@ -529,18 +448,120 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
       let allSegments = [];
       let failedWindows = [];
 
+      // Process each window with the LLM directly
       for (let i = 0; i < windows.length; i++) {
         const window = windows[i];
         console.log(`🎯 Processing window ${i + 1}/${windows.length} (${Math.round(window.startTime)}s-${Math.round(window.endTime)}s)`);
 
         try {
-          const windowSegments = await segmentWindow(window, duration);
-          allSegments = allSegments.concat(windowSegments);
-          console.log(`✅ Window ${i + 1} complete: found ${windowSegments.length} segments`);
+          // Create initial segments for this window
+          const segmentationPayload = {
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `You are an expert at analyzing video content and creating meaningful segments. Your task is to break this transcript portion into logical segments while maintaining precise timing.
 
-          // Clean up processed window to free memory
+Key Requirements:
+1. Create segments that capture complete thoughts or topics
+2. Use natural breaks in conversation
+3. Identify advertisements and promotional content precisely
+4. Create segments that are neither too short nor too long
+5. Mark as filler:
+   - Clear advertisements and sponsorships
+   - Self-promotion segments
+   - Completely off-topic content
+
+This is a portion of a ${Math.round(duration)} second video, from ${Math.round(window.startTime)}s to ${Math.round(window.endTime)}s.`,
+              },
+              {
+                role: 'user',
+                content: `Please analyze this transcript portion and create meaningful segments.
+
+Transcript: ${window.text}
+
+Word timestamps: ${JSON.stringify(window.words)}
+
+Requirements:
+1. Use the word timestamps to create precise segment boundaries
+2. Each segment should have a clear topic and summary
+3. Mark promotional content as filler
+4. Ensure natural content flow
+
+Return the segments in the required JSON format.`,
+              },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'videoSegments',
+                schema: {
+                  type: 'object',
+                  properties: {
+                    segments: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          startTime: { type: 'number' },
+                          endTime: { type: 'number' },
+                          topic: { type: 'string' },
+                          summary: { type: 'string' },
+                          isFiller: { type: 'boolean' },
+                        },
+                        required: ['startTime', 'endTime', 'topic', 'summary', 'isFiller'],
+                        additionalProperties: false,
+                      },
+                    },
+                  },
+                  required: ['segments'],
+                  additionalProperties: false,
+                },
+                strict: true,
+              },
+            },
+          };
+
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify(segmentationPayload),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Segmentation failed: ${await response.text()}`);
+          }
+
+          const result = await response.json();
+          const windowSegments = JSON.parse(result.choices[0].message.content).segments;
+
+          // Log segment information before adding to array
+          console.log(
+            `Window ${i + 1} segments:`,
+            windowSegments.map((s) => ({
+              start: Math.round(s.startTime),
+              end: Math.round(s.endTime),
+              topic: s.topic.substring(0, 50) + '...',
+            }))
+          );
+
+          // Add segments to array and immediately clean up window
+          allSegments = allSegments.concat(windowSegments);
           window.words = null;
           window.text = null;
+
+          // Every 5 windows, log memory usage
+          if (i % 5 === 0) {
+            const used = process.memoryUsage();
+            console.log('Memory usage:', {
+              heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)} MB`,
+              heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)} MB`,
+              segments: allSegments.length,
+            });
+          }
         } catch (error) {
           console.error(`❌ Failed to process window ${i + 1}:`, error);
           failedWindows.push({
@@ -550,41 +571,31 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
             error: error.message,
           });
         }
-
-        // Every 5 windows, merge segments to free up memory
-        if (i > 0 && i % 5 === 0) {
-          allSegments = mergeOverlappingSegments(allSegments);
-        }
       }
 
-      console.log('🔄 Final merge of all segments...');
-      const segments = mergeOverlappingSegments(allSegments);
+      // Log failed windows
+      if (failedWindows.length > 0) {
+        console.warn('❌ Failed to process some windows:', failedWindows);
+      }
 
-      // Clear large arrays to free memory
-      allSegments = null;
-      windows.forEach((w) => {
-        w.words = null;
-        w.text = null;
-      });
+      // Optimize segments
+      console.log('🧠 Starting segment optimization...');
+      const optimizedSegments = await optimizeSegments(allSegments, duration);
+      console.log('✅ Segment optimization complete');
 
-      console.log('✅ Segmentation complete:', {
-        numberOfSegments: segments.length,
-        failedWindows: failedWindows.length > 0 ? failedWindows : 'none',
-      });
-
-      // Update Firestore with segments and processing metadata
+      // Save segments to Firestore
       console.log('💾 Updating Firestore...');
       await firestore
         .collection('videos')
         .doc(videoId)
         .update({
           transcription: whisperResult.text,
-          segments: segments,
+          segments: optimizedSegments,
           processedAt: FieldValue.serverTimestamp(),
           processingMetadata: {
             totalWindows: windows.length,
-            failedWindows: failedWindows,
-            segmentCount: segments.length,
+            failedWindows: failedWindows.length > 0 ? failedWindows : null,
+            segmentCount: optimizedSegments.length,
           },
         });
       console.log('✅ Firestore updated successfully');
@@ -598,19 +609,11 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
       return {
         success: true,
         videoId,
-        segmentsCount: segments.length,
+        segmentsCount: optimizedSegments.length,
+        failedWindows: failedWindows.length > 0 ? failedWindows : null,
       };
     } catch (error) {
-      console.error('❌ Error processing video:', error);
-
-      // Cleanup on error
-      try {
-        if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
-        if (fs.existsSync(tempAudioPath)) fs.unlinkSync(tempAudioPath);
-      } catch (cleanupError) {
-        console.error('❌ Error during cleanup:', cleanupError);
-      }
-
+      console.error('Error during video processing:', error);
       throw error;
     }
   }
