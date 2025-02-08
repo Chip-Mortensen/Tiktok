@@ -1,7 +1,8 @@
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
+const { onCall } = require('firebase-functions/v2/https');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const path = require('path');
@@ -161,3 +162,225 @@ exports.generateHLS = onObjectFinalized(
 
 // Export video segmentation function
 exports.transcribeAndSegmentAudio = videoSegmentation.transcribeAndSegmentAudio;
+
+exports.deleteVideo = onCall(
+  {
+    maxInstances: 1,
+    timeoutSeconds: 540,
+    memory: '512MB',
+  },
+  async (request) => {
+    // Verify authentication
+    if (!request.auth) {
+      throw new Error('Unauthorized: User must be authenticated');
+    }
+
+    const { videoId, userId } = request.data;
+    if (!videoId || !userId) {
+      throw new Error('Missing required parameters: videoId and userId are required');
+    }
+
+    // Verify user owns the video
+    const firestore = getFirestore();
+    const videoDoc = await firestore.collection('videos').doc(videoId).get();
+
+    if (!videoDoc.exists) {
+      throw new Error('Video not found');
+    }
+
+    const videoData = videoDoc.data();
+    if (videoData.userId !== userId) {
+      throw new Error('Unauthorized: User does not own this video');
+    }
+
+    if (request.auth.uid !== userId) {
+      throw new Error('Unauthorized: User ID mismatch');
+    }
+
+    const storage = getStorage();
+    const bucket = storage.bucket();
+    const deletionResults = {
+      storage: { success: true, errors: [] },
+      firestore: { success: true, errors: [] },
+    };
+
+    try {
+      console.log(`Starting deletion process for video ${videoId} owned by user ${userId}`);
+
+      // 1. Delete storage files first
+      try {
+        // Delete video file
+        const videoPath = `videos/${userId}/${videoId}.mp4`;
+        try {
+          await bucket.file(videoPath).delete();
+          console.log('Original video file deleted');
+        } catch (error) {
+          if (error.code !== 404) {
+            deletionResults.storage.errors.push({ type: 'video', error });
+          }
+          console.log('Original video file not found, continuing...');
+        }
+
+        // Delete thumbnail
+        if (videoData.thumbnailUrl) {
+          const thumbnailPath = `thumbnails/${userId}/${videoId}.jpg`;
+          try {
+            await bucket.file(thumbnailPath).delete();
+            console.log('Thumbnail file deleted');
+          } catch (error) {
+            if (error.code !== 404) {
+              deletionResults.storage.errors.push({ type: 'thumbnail', error });
+            }
+            console.log('Thumbnail file not found, continuing...');
+          }
+        }
+
+        // Delete HLS files
+        if (videoData.m3u8Url) {
+          const hlsPrefix = `hls/${userId}/${videoId}/`;
+          try {
+            const [files] = await bucket.getFiles({ prefix: hlsPrefix });
+            await Promise.all(files.map((file) => file.delete()));
+            console.log(`Deleted ${files.length} HLS files`);
+          } catch (error) {
+            if (error.code !== 404) {
+              deletionResults.storage.errors.push({ type: 'hls', error });
+            }
+            console.log('HLS directory not found, continuing...');
+          }
+        }
+      } catch (error) {
+        console.error('Error during storage cleanup:', error);
+        deletionResults.storage.success = false;
+        deletionResults.storage.errors.push({ type: 'general', error });
+      }
+
+      // 2. Delete Firestore documents
+      try {
+        console.log('Debugging bookmark query for videoId:', videoId);
+
+        // First try a direct query to see what's in the bookmarkedVideos collection
+        const directBookmarkQuery = await firestore.collectionGroup('bookmarkedVideos').get();
+
+        console.log(
+          'All bookmarkedVideos documents:',
+          directBookmarkQuery.docs.map((doc) => ({
+            path: doc.ref.path,
+            data: doc.data(),
+            id: doc.id,
+          }))
+        );
+
+        // Now get bookmarks by matching the document ID
+        const bookmarksSnapshot = {
+          docs: directBookmarkQuery.docs.filter((doc) => doc.id === videoId),
+        };
+
+        console.log('Filtered bookmarks result:', {
+          found: bookmarksSnapshot.docs.length,
+          paths: bookmarksSnapshot.docs.map((doc) => doc.ref.path),
+          data: bookmarksSnapshot.docs.map((doc) => doc.data()),
+        });
+
+        // Get the other data as well
+        const [commentsSnapshot, likesSnapshot] = await Promise.all([
+          firestore
+            .collectionGroup('comments')
+            .where('videoId', '==', videoId)
+            .get()
+            .catch((error) => {
+              console.error('Error fetching comments:', error);
+              deletionResults.firestore.errors.push({ type: 'comments_query', error });
+              return { docs: [] };
+            }),
+          firestore
+            .collectionGroup('likedVideos')
+            .where('videoId', '==', videoId)
+            .get()
+            .catch((error) => {
+              console.error('Error fetching likes:', error);
+              deletionResults.firestore.errors.push({ type: 'likes_query', error });
+              return { docs: [] };
+            }),
+        ]);
+
+        console.log(
+          `Found ${commentsSnapshot.docs.length} comments, ${likesSnapshot.docs.length} likes, and ${bookmarksSnapshot.docs.length} bookmarks to delete`
+        );
+
+        // Process deletions in batches
+        const BATCH_SIZE = 500;
+        const batches = [];
+        let currentBatch = firestore.batch();
+        let operationCount = 0;
+
+        const addToBatch = (ref) => {
+          currentBatch.delete(ref);
+          operationCount++;
+
+          if (operationCount === BATCH_SIZE) {
+            batches.push(currentBatch.commit());
+            currentBatch = firestore.batch();
+            operationCount = 0;
+          }
+        };
+
+        // Add all deletions to batches
+        [...commentsSnapshot.docs, ...likesSnapshot.docs, ...bookmarksSnapshot.docs].forEach((doc) => {
+          addToBatch(doc.ref);
+        });
+
+        // Delete the video document and update user counts
+        currentBatch.delete(videoDoc.ref);
+        operationCount++;
+
+        const userRef = firestore.collection('users').doc(userId);
+        currentBatch.update(userRef, {
+          postsCount: FieldValue.increment(-1),
+          likesCount: FieldValue.increment(-videoData.likes || 0),
+        });
+        operationCount++;
+
+        // Add final batch if needed
+        if (operationCount > 0) {
+          batches.push(currentBatch.commit());
+        }
+
+        // Execute all batches
+        if (batches.length > 0) {
+          console.log(`Executing ${batches.length} batch(es) of deletions...`);
+          await Promise.all(batches);
+          console.log(`Successfully executed ${batches.length} batch(es) of deletions`);
+        }
+
+        return {
+          success: true,
+          deletedCounts: {
+            comments: commentsSnapshot.docs.length,
+            likes: likesSnapshot.docs.length,
+            bookmarks: bookmarksSnapshot.docs.length,
+          },
+          deletionResults,
+        };
+      } catch (error) {
+        console.error('Error during Firestore cleanup:', error);
+        deletionResults.firestore.success = false;
+        deletionResults.firestore.errors.push({ type: 'batch_operations', error });
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error during video deletion:', {
+        error: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          stack: error.stack,
+        },
+        videoId,
+        userId,
+        deletionResults,
+      });
+      throw new Error(`Failed to delete video: ${error.message} (Code: ${error.code})`);
+    }
+  }
+);

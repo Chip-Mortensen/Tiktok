@@ -87,7 +87,7 @@ async function transcribeAudioChunk(chunkPath, startTime) {
   return result;
 }
 
-async function createSlidingWindows(text, words, maxTokens = 100000, overlapTokens = 20000) {
+async function createSlidingWindows(text, words, maxTokens = 100000) {
   const getTokenCount = (text) => encode(text).length;
 
   try {

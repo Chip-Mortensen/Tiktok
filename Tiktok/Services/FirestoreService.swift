@@ -2,12 +2,14 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 import FirebaseStorage
+import FirebaseFunctions
 
 enum FirestoreError: Error {
     case documentNotFound
     case invalidData
     case unknown
     case selfFollow
+    case deletionFailed
 }
 
 class FirestoreService {
@@ -147,45 +149,46 @@ class FirestoreService {
     
     // Method to delete a video
     func deleteVideo(video: VideoModel) async throws {
-        // Delete from Firestore
-        let videoRef = db.collection("videos").document(video.id)
-        try await videoRef.delete()
-
-        // Delete video and thumbnail from Storage
-        let storage = Storage.storage().reference()
+        let functions = Functions.functions()
         
-        // Construct storage paths
-        let videoPath = "videos/\(video.userId)/\(video.id).mp4"
-        let thumbnailPath = "thumbnails/\(video.userId)/\(video.id).jpg"
-        let hlsBasePath = "hls/\(video.userId)/\(video.id)"
+        let data: [String: Any] = [
+            "videoId": video.id,
+            "userId": video.userId
+        ]
         
-        // Delete video file
-        let videoStorageRef = storage.child(videoPath)
-        try await videoStorageRef.delete()
-        
-        // Delete thumbnail file if it exists
-        if video.thumbnailUrl != nil {
-            let thumbnailStorageRef = storage.child(thumbnailPath)
-            try await thumbnailStorageRef.delete()
-        }
-
-        // Delete HLS files if they exist
-        if video.m3u8Url != nil {
-            // List all files in the HLS directory
-            let hlsRef = storage.child(hlsBasePath)
-            let hlsFiles = try await hlsRef.listAll()
+        do {
+            print("DEBUG: Starting video deletion for videoId: \(video.id), userId: \(video.userId)")
+            let result = try await functions.httpsCallable("deleteVideo").call(data)
             
-            // Delete each file in the HLS directory
-            for item in hlsFiles.items {
-                try await item.delete()
+            if let response = result.data as? [String: Any] {
+                print("DEBUG: Received response from cloud function:", response)
+                
+                if let success = response["success"] as? Bool {
+                    if success {
+                        if let deletedCounts = response["deletedCounts"] as? [String: Int] {
+                            print("DEBUG: Successfully deleted video with counts:", deletedCounts)
+                        }
+                        return
+                    }
+                }
+                
+                if let error = response["error"] as? [String: Any] {
+                    print("DEBUG: Cloud function returned error:", error)
+                }
+            } else {
+                print("DEBUG: Unexpected response format:", String(describing: result.data))
             }
+            
+            throw FirestoreError.deletionFailed
+        } catch let error as NSError {
+            print("DEBUG: Failed to delete video with error: \(error.localizedDescription)")
+            print("DEBUG: Error domain: \(error.domain)")
+            print("DEBUG: Error code: \(error.code)")
+            if let details = error.userInfo["details"] as? String {
+                print("DEBUG: Error details: \(details)")
+            }
+            throw FirestoreError.deletionFailed
         }
-
-        // Also decrement the posts count for the user
-        let userRef = db.collection("users").document(video.userId)
-        try await userRef.updateData([
-            "postsCount": FieldValue.increment(Int64(-1))
-        ])
     }
     
     func fetchVideos(limit: Int = 10) async throws -> [VideoModel] {
@@ -700,9 +703,18 @@ class FirestoreService {
     func addVideoListener(videoId: String, onChange: @escaping (VideoModel?) -> Void) -> ListenerRegistration {
         return db.collection("videos").document(videoId)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self,
-                      let document = snapshot else {
-                    print("DEBUG: Error fetching video: \(error?.localizedDescription ?? "")")
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("DEBUG: Error fetching video: \(error.localizedDescription)")
+                    onChange(nil)
+                    return
+                }
+                
+                // Handle document deletion
+                guard let document = snapshot, document.exists else {
+                    print("DEBUG: Video document was deleted or does not exist")
+                    onChange(nil)
                     return
                 }
                 

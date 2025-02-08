@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D43BD7A22D55A4B900FA3FA5 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = D43BD7A12D55A4B900FA3FA5 /* GoogleSignIn */; };
 		D43BD7A42D55A4B900FA3FA5 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D43BD7A32D55A4B900FA3FA5 /* GoogleSignInSwift */; };
+		D43BD7A62D56F77500FA3FA5 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = D43BD7A52D56F77500FA3FA5 /* FirebaseFunctions */; };
 		D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = D445E5EF2D51438800695987 /* FirebaseAuth */; };
 		D445E6102D51687300695987 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = D445E60F2D51687300695987 /* FirebaseStorage */; };
 		D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = D445E6112D51689500695987 /* FirebaseFirestore */; };
@@ -47,6 +48,7 @@
 				D43BD7A42D55A4B900FA3FA5 /* GoogleSignInSwift in Frameworks */,
 				D445E5F02D51438800695987 /* FirebaseAuth in Frameworks */,
 				D43BD7A22D55A4B900FA3FA5 /* GoogleSignIn in Frameworks */,
+				D43BD7A62D56F77500FA3FA5 /* FirebaseFunctions in Frameworks */,
 				D445E6102D51687300695987 /* FirebaseStorage in Frameworks */,
 				D445E6122D51689500695987 /* FirebaseFirestore in Frameworks */,
 			);
@@ -104,6 +106,7 @@
 				D445E6112D51689500695987 /* FirebaseFirestore */,
 				D43BD7A12D55A4B900FA3FA5 /* GoogleSignIn */,
 				D43BD7A32D55A4B900FA3FA5 /* GoogleSignInSwift */,
+				D43BD7A52D56F77500FA3FA5 /* FirebaseFunctions */,
 			);
 			productName = Tiktok;
 			productReference = D445E5DB2D51335300695987 /* Tiktok.app */;
@@ -403,6 +406,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D43BD7A02D55A4B900FA3FA5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
+		};
+		D43BD7A52D56F77500FA3FA5 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D445E5EE2D51438800695987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 		D445E5EF2D51438800695987 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;

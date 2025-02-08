@@ -64,9 +64,11 @@ service cloud.firestore {
       allow read: if true;  // Anyone can see bookmarked videos
       allow create: if request.auth != null 
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['timestamp']);  // Ensure only timestamp is stored
-      allow delete: if request.auth != null 
-        && request.auth.uid == userId;
+        && request.resource.data.keys().hasOnly(['timestamp']);
+      allow delete: if request.auth != null && (
+        request.auth.uid == userId ||  // Bookmark owner can delete
+        request.auth.token.firebase.sign_in_provider == 'google.com' // Allow cloud functions
+      );
     }
     
     // Username uniqueness collection
@@ -125,6 +127,15 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid;  // Only the liker can create
       allow delete: if request.auth != null 
         && request.auth.uid == resource.data.userId;  // Only the liker can delete
+    }
+    
+    // Allow collection group queries for bookmarkedVideos
+    match /{path=**}/bookmarkedVideos/{videoId} {
+      allow read: if true;
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.parent.parent.id ||  // Bookmark owner can delete
+        request.auth.token.firebase.sign_in_provider == 'google.com' // Allow cloud functions
+      );
     }
     
     // Default deny all other collections
