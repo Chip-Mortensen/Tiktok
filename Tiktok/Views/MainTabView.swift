@@ -30,7 +30,7 @@ struct MainTabView: View {
             .tag(0)
             
             NavigationStack {
-                UsersSearchView()
+                SearchView()
                     .environment(\.tabSelection, $selectedTab)
             }
             .tabItem {

@@ -1,49 +1,95 @@
 import SwiftUI
 import FirebaseAuth
 
-struct UsersSearchView: View {
-    @StateObject private var viewModel = UsersSearchViewModel()
+struct SearchView: View {
+    @StateObject private var usersViewModel = UsersSearchViewModel()
+    @StateObject private var videoViewModel = VideoSearchViewModel()
+    @State private var searchType: SearchType = .users
     @Environment(\.tabSelection) var tabSelection
     @FocusState private var isSearchFieldFocused: Bool
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SearchBarView(
-                    searchQuery: $viewModel.searchQuery,
-                    onClear: {
-                        viewModel.searchQuery = ""
-                        viewModel.performSearch()
-                    },
-                    onChange: {
-                        viewModel.performSearch()
-                    },
-                    focusBinding: $isSearchFieldFocused
-                )
-                
-                SearchResultsView(
-                    isLoading: viewModel.isLoading,
-                    searchQuery: viewModel.searchQuery,
-                    searchResults: viewModel.searchResults,
-                    tabSelection: tabSelection
-                )
+                HStack {
+                    SearchBarView(
+                        searchQuery: Binding(
+                            get: { searchType == .users ? usersViewModel.searchQuery : videoViewModel.searchQuery },
+                            set: { newValue in
+                                if searchType == .users {
+                                    usersViewModel.searchQuery = newValue
+                                } else {
+                                    videoViewModel.searchQuery = newValue
+                                }
+                            }
+                        ),
+                        onClear: {
+                            if searchType == .users {
+                                usersViewModel.searchQuery = ""
+                                usersViewModel.performSearch()
+                            } else {
+                                videoViewModel.searchQuery = ""
+                                videoViewModel.performSearch()
+                            }
+                        },
+                        onChange: {
+                            if searchType == .users {
+                                usersViewModel.performSearch()
+                            } else {
+                                videoViewModel.performSearch()
+                            }
+                        },
+                        focusBinding: $isSearchFieldFocused
+                    )
+
+                    // Dropdown to toggle between user and video search
+                    Menu {
+                        ForEach(SearchType.allCases, id: \.self) { type in
+                            Button(type.rawValue) {
+                                searchType = type
+                                isSearchFieldFocused = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down.circle")
+                            .font(.title2)
+                    }
+                    .padding(.trailing)
+                }
+                .padding(.horizontal)
+                .environment(\.searchType, searchType)
+
+                // Conditional result view based on search type
+                if searchType == .users {
+                    UsersSearchResultsView(
+                        isLoading: usersViewModel.isLoading,
+                        searchQuery: usersViewModel.searchQuery,
+                        searchResults: usersViewModel.searchResults,
+                        tabSelection: tabSelection
+                    )
+                } else {
+                    VideoSearchResultsView(
+                        isLoading: videoViewModel.isLoading,
+                        searchQuery: videoViewModel.searchQuery,
+                        searchResults: videoViewModel.searchResults
+                    )
+                    .environmentObject(BookmarkService.shared)
+                }
             }
-            .navigationTitle("Find Users")
+            .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
         }
         .task {
-            // Monitor tab selection changes
+            // Automatically focus the search field when in the search tab
             if tabSelection.wrappedValue == 1 {
-                // Small delay to ensure view is ready
-                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                try? await Task.sleep(nanoseconds: 50_000_000)
                 isSearchFieldFocused = true
             }
         }
         .onChange(of: tabSelection.wrappedValue) { _, newValue in
             if newValue == 1 {
-                // Small delay to ensure view is ready
                 Task {
-                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                    try? await Task.sleep(nanoseconds: 50_000_000)
                     isSearchFieldFocused = true
                 }
             } else {
@@ -59,13 +105,14 @@ private struct SearchBarView: View {
     let onClear: () -> Void
     let onChange: () -> Void
     let focusBinding: FocusState<Bool>.Binding
+    @Environment(\.searchType) private var searchType
     
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.gray)
             
-            TextField("Search users", text: $searchQuery)
+            TextField(searchType == .users ? "Search users" : "Search videos", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .autocapitalization(.none)
                 .focused(focusBinding)
@@ -86,8 +133,20 @@ private struct SearchBarView: View {
     }
 }
 
+// Add environment key for search type
+private struct SearchTypeKey: EnvironmentKey {
+    static let defaultValue: SearchType = .users
+}
+
+extension EnvironmentValues {
+    var searchType: SearchType {
+        get { self[SearchTypeKey.self] }
+        set { self[SearchTypeKey.self] = newValue }
+    }
+}
+
 // MARK: - Search Results View
-private struct SearchResultsView: View {
+private struct UsersSearchResultsView: View {
     let isLoading: Bool
     let searchQuery: String
     let searchResults: [UserModel]
