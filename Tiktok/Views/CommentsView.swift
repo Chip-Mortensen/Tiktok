@@ -90,6 +90,11 @@ struct CommentCell: View {
         let now = Date()
         let diff = Int(now.timeIntervalSince(date))
         
+        // Less than a minute
+        if diff < 60 {
+            return "Just Now"
+        }
+        
         // Convert to minutes
         let minutes = diff / 60
         if minutes < 60 {
