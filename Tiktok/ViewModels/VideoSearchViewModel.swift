@@ -4,7 +4,7 @@ import FirebaseFirestore
 @MainActor
 class VideoSearchViewModel: ObservableObject {
     @Published var searchQuery: String = ""
-    @Published var searchResults: [VideoModel] = []
+    @Published var searchResults: [(video: VideoModel, startTime: Double?)] = []
     @Published var isLoading = false
     private let db = Firestore.firestore()
     private var searchTask: Task<Void, Never>?
@@ -35,7 +35,7 @@ class VideoSearchViewModel: ObservableObject {
                     .limit(to: 50)
                     .getDocuments()
 
-                var videos: [VideoModel] = []
+                var videos: [(video: VideoModel, startTime: Double?)] = []
                 let searchTermLower = trimmedQuery.lowercased()
 
                 for document in snapshot.documents {
@@ -43,8 +43,38 @@ class VideoSearchViewModel: ObservableObject {
                     let transcription = (data["transcription"] as? String ?? "").lowercased()
                     let caption = (data["caption"] as? String ?? "").lowercased()
                     
+                    // Parse segments if available
+                    let segments = (data["segments"] as? [[String: Any]])?.compactMap { segmentData -> VideoModel.Segment? in
+                        guard let startTime = segmentData["startTime"] as? Double,
+                              let endTime = segmentData["endTime"] as? Double,
+                              let topic = segmentData["topic"] as? String,
+                              let summary = segmentData["summary"] as? String else {
+                            print("⚠️ Invalid segment data:", segmentData)
+                            return nil
+                        }
+                        return VideoModel.Segment(
+                            startTime: startTime,
+                            endTime: endTime,
+                            topic: topic,
+                            summary: summary,
+                            isFiller: segmentData["isFiller"] as? Bool ?? false
+                        )
+                    }
+                    
                     // Check if either field contains the search term
                     if transcription.contains(searchTermLower) || caption.contains(searchTermLower) {
+                        // Find the most relevant segment if available
+                        var relevantStartTime: Double? = nil
+                        if let segments = segments {
+                            for segment in segments {
+                                let segmentText = "\(segment.topic) \(segment.summary)".lowercased()
+                                if segmentText.contains(searchTermLower) {
+                                    relevantStartTime = segment.startTime
+                                    break
+                                }
+                            }
+                        }
+                        
                         let video = VideoModel(
                             id: document.documentID,
                             userId: data["userId"] as? String ?? "",
@@ -59,9 +89,9 @@ class VideoSearchViewModel: ObservableObject {
                             isLiked: false,
                             isBookmarked: false,
                             commentsCount: data["commentsCount"] as? Int ?? 0,
-                            segments: nil
+                            segments: segments
                         )
-                        videos.append(video)
+                        videos.append((video: video, startTime: relevantStartTime))
                     }
                 }
 

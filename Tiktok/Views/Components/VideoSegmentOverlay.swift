@@ -25,7 +25,7 @@ struct VideoSegmentOverlay: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 160)
+                .frame(height: 240)
                 .overlay(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(segment.topic)
@@ -35,7 +35,7 @@ struct VideoSegmentOverlay: View {
                         Text(segment.summary)
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.9))
-                            .lineLimit(2)
+                            .lineLimit(6)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)

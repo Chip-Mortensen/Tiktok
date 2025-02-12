@@ -1,6 +1,6 @@
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
-const functions = require('firebase-functions/v2');
+const { storage } = require('firebase-functions/v2');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const os = require('os');
@@ -9,6 +9,7 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const { encode } = require('gpt-3-encoder');
+const { generateEmbedding, uploadToVectorDB } = require('./embeddings');
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -200,7 +201,52 @@ Filler content includes:
   }
 }
 
-async function optimizeSegments(segments, totalDuration) {
+async function processSegmentForSearch(segment, videoId, videoData) {
+  try {
+    // Generate embedding for the segment's transcript
+    const textToEmbed = `${segment.topic}\n${segment.summary}\n${segment.transcript}`;
+    const embedding = await generateEmbedding(textToEmbed);
+
+    // Generate a unique ID for this segment if not provided
+    const segmentId = segment.id || `${videoId}_${segment.startTime}_${segment.endTime}`;
+
+    // Prepare metadata for vector storage
+    const vectorMetadata = {
+      videoId,
+      segmentId,
+      startTime: segment.startTime,
+      endTime: segment.endTime,
+      topic: segment.topic,
+      summary: segment.summary,
+      transcript: segment.transcript,
+      isFiller: segment.isFiller,
+    };
+
+    // Add video context metadata
+    const additionalMetadata = {
+      videoTitle: videoData.caption,
+      username: videoData.username,
+      thumbnailUrl: videoData.thumbnailUrl,
+    };
+
+    // Upload to Pinecone with enhanced metadata
+    await uploadToVectorDB(
+      {
+        id: segmentId,
+        values: embedding,
+        metadata: vectorMetadata,
+      },
+      additionalMetadata
+    );
+
+    return true;
+  } catch (error) {
+    console.error(`❌ Error processing segment ${segment.id || 'unknown'} for search:`, error);
+    return false;
+  }
+}
+
+async function optimizeSegments(segments, totalDuration, videoId, videoData) {
   const optimizationPayload = {
     model: 'gpt-4o-mini',
     messages: [
@@ -317,18 +363,24 @@ Return the optimized segments in the same JSON format.`,
       throw new Error(`Last segment ends at ${lastSegment.endTime} instead of ${totalDuration}`);
     }
 
+    // Process each segment for search
+    for (const segment of optimizedSegments) {
+      await processSegmentForSearch(segment, videoId, videoData);
+    }
+
     return optimizedSegments;
   } catch (error) {
     console.error('Error during segment optimization:', error);
-    throw error; // Propagate the error instead of returning potentially invalid segments
+    throw error;
   }
 }
 
-exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
+exports.transcribeAndSegmentAudio = storage.onObjectFinalized(
   {
     timeoutSeconds: 1800,
     memory: '2GB',
-    secrets: ['OPENAI_API_KEY'],
+    secrets: ['OPENAI_API_KEY', 'PINECONE_API_KEY', 'PINECONE_ENVIRONMENT', 'PINECONE_INDEX_NAME'],
+    ingressSettings: 'ALLOW_ALL', // Allow outbound connections
   },
   async (event) => {
     const firestore = getFirestore();
@@ -347,15 +399,17 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
     const filePath = object.name;
     const fileName = path.basename(filePath);
     const videoId = path.parse(fileName).name;
+    const userId = filePath.split('/')[1]; // Extract userId from videos/{userId}/{videoId}.mp4
     const tmpDir = os.tmpdir();
     const tempVideoPath = path.join(tmpDir, fileName);
     const audioFileName = `${videoId}.mp3`;
     const tempAudioPath = path.join(tmpDir, audioFileName);
 
-    console.log('📁 File details:', {
+    console.log('🎫 File details:', {
       bucketName,
       filePath,
       videoId,
+      userId,
       tempVideoPath,
       tempAudioPath,
     });
@@ -443,7 +497,7 @@ exports.transcribeAndSegmentAudio = functions.storage.onObjectFinalized(
       // Segment with sliding windows
       console.log('🧠 Starting sliding window segmentation...');
       const windows = await createSlidingWindows(whisperResult.text, whisperResult.words);
-      console.log(`📊 Created ${windows.length} windows for processing`);
+      console.log(`🔢 Created ${windows.length} windows for processing`);
 
       let allSegments = [];
       let failedWindows = [];
@@ -580,7 +634,11 @@ Return the segments in the required JSON format.`,
 
       // Optimize segments
       console.log('🧠 Starting segment optimization...');
-      const optimizedSegments = await optimizeSegments(allSegments, duration);
+      const optimizedSegments = await optimizeSegments(allSegments, duration, videoId, {
+        caption: (await firestore.collection('videos').doc(videoId).get()).data()?.caption || '',
+        username: (await firestore.collection('users').doc(userId).get()).data()?.username || '',
+        thumbnailUrl: `https://storage.googleapis.com/${bucketName}/thumbnails/${userId}/${videoId}.jpg`,
+      });
       console.log('✅ Segment optimization complete');
 
       // Save segments to Firestore

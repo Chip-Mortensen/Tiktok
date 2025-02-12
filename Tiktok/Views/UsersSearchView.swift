@@ -109,7 +109,8 @@ private struct SearchBarView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
+            // Show different icon based on search type
+            Image(systemName: searchType == .users ? "person.fill" : "video.fill")
                 .foregroundColor(.gray)
             
             TextField(searchType == .users ? "Search users" : "Search videos", text: $searchQuery)

@@ -11,6 +11,12 @@ struct VideoDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var selectedUserId: String? = nil
     @State private var pushUserProfile = false
+    let initialStartTime: Double?  // Add parameter for initial start time
+    
+    init(video: Binding<VideoModel>, initialStartTime: Double? = nil) {
+        self._video = video
+        self.initialStartTime = initialStartTime
+    }
     
     var body: some View {
         NavigationView {
@@ -32,7 +38,8 @@ struct VideoDetailView: View {
                     ),
                     isActive: true,
                     selectedUserId: $selectedUserId,
-                    pushUserProfile: $pushUserProfile
+                    pushUserProfile: $pushUserProfile,
+                    initialStartTime: initialStartTime  // Pass the initial start time
                 )
                 .environmentObject(bookmarkService)
             }

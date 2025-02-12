@@ -161,7 +161,8 @@ struct VideoPlayerContainer: View {
                 video: $video,
                 isActive: isActive,
                 selectedUserId: $selectedUserId,
-                pushUserProfile: $pushUserProfile
+                pushUserProfile: $pushUserProfile,
+                initialStartTime: nil
             )
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
@@ -178,6 +179,7 @@ struct VideoContent: View {
     let isActive: Bool
     @Binding var selectedUserId: String?
     @Binding var pushUserProfile: Bool
+    let initialStartTime: Double?
     @State private var player: AVPlayer?
     @State private var isPlaying = false
     @EnvironmentObject private var appState: AppState
@@ -552,11 +554,27 @@ struct VideoContent: View {
                         let isPlayable = try await asset.load(.isPlayable)
                         if isPlayable {
                             await MainActor.run {
-                                // Start playing once ready
-                                self.player?.play()
-                                self.isPlaying = true
-                                // Set up progress tracking after player is ready
-                                self.setupProgressTracking()
+                                // If we have an initial start time, seek to it after confirming playability
+                                if let startTime = initialStartTime {
+                                    print("DEBUG: Seeking to initial start time:", startTime)
+                                    let time = CMTime(seconds: startTime, preferredTimescale: 600)
+                                    player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+                                        print("DEBUG: Seek operation finished:", finished)
+                                        if finished {
+                                            // Start playing after successful seek
+                                            self.player?.play()
+                                            self.isPlaying = true
+                                            // Set up progress tracking after player is ready
+                                            self.setupProgressTracking()
+                                        }
+                                    }
+                                } else {
+                                    // Start playing immediately if no initial start time
+                                    self.player?.play()
+                                    self.isPlaying = true
+                                    // Set up progress tracking after player is ready
+                                    self.setupProgressTracking()
+                                }
                             }
                         }
                     } catch {

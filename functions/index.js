@@ -1,19 +1,19 @@
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
-const { onObjectFinalized } = require('firebase-functions/v2/storage');
-const { onCall } = require('firebase-functions/v2/https');
+const functions = require('firebase-functions');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const videoSegmentation = require('./videoSegmentation');
+const { deleteVideoVectors } = require('./embeddings');
 
 initializeApp();
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
-exports.generateHLS = onObjectFinalized(
+exports.generateHLS = functions.storage.onObjectFinalized(
   {
     timeoutSeconds: 540,
     memory: '2GB',
@@ -163,11 +163,56 @@ exports.generateHLS = onObjectFinalized(
 // Export video segmentation function
 exports.transcribeAndSegmentAudio = videoSegmentation.transcribeAndSegmentAudio;
 
-exports.deleteVideo = onCall(
+// Add semantic search function
+exports.searchVideoSegments = functions.https.onCall(
+  {
+    maxInstances: 10,
+    timeoutSeconds: 30,
+    memory: '256MB',
+    secrets: ['OPENAI_API_KEY', 'PINECONE_API_KEY', 'PINECONE_ENVIRONMENT', 'PINECONE_INDEX_NAME'],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new Error('Unauthorized: User must be authenticated');
+    }
+
+    const { query, limit = 10, filters = {} } = request.data;
+    if (!query) {
+      throw new Error('Missing required parameter: query');
+    }
+
+    try {
+      console.log(`🔍 Searching for: "${query}" with filters:`, filters);
+
+      // Generate embedding for search query
+      const { generateEmbedding, searchVectors } = require('./embeddings');
+      const queryEmbedding = await generateEmbedding(query);
+
+      // Search Pinecone with filters
+      const searchResults = await searchVectors(queryEmbedding, limit, filters);
+
+      // Format results for client
+      const formattedResults = searchResults.map((match) => ({
+        score: match.score,
+        segment: match.metadata,
+        videoId: match.metadata.videoId,
+      }));
+
+      console.log(`✅ Found ${formattedResults.length} results`);
+      return { segments: formattedResults };
+    } catch (error) {
+      console.error('❌ Search error:', error);
+      throw new Error('Failed to perform search: ' + error.message);
+    }
+  }
+);
+
+exports.deleteVideo = functions.https.onCall(
   {
     maxInstances: 1,
     timeoutSeconds: 540,
     memory: '512MB',
+    secrets: ['PINECONE_API_KEY', 'PINECONE_ENVIRONMENT', 'PINECONE_INDEX_NAME'],
   },
   async (request) => {
     // Verify authentication
@@ -207,7 +252,17 @@ exports.deleteVideo = onCall(
     try {
       console.log(`Starting deletion process for video ${videoId} owned by user ${userId}`);
 
-      // 1. Delete storage files first
+      // Delete Pinecone vectors first
+      try {
+        console.log('Deleting Pinecone vectors...');
+        await deleteVideoVectors(videoId);
+        console.log('Successfully deleted Pinecone vectors');
+      } catch (error) {
+        console.error('Error deleting Pinecone vectors:', error);
+        deletionResults.storage.errors.push({ type: 'pinecone', error });
+      }
+
+      // 1. Delete storage files
       try {
         // Delete video file
         const videoPath = `videos/${userId}/${videoId}.mp4`;
