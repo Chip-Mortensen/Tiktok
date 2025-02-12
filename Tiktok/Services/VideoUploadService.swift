@@ -3,23 +3,6 @@ import FirebaseStorage
 import AVFoundation
 import UIKit
 
-enum VideoUploadError: Error {
-    case thumbnailGenerationFailed
-    case videoDataReadFailed
-    case uploadFailed(String)
-    
-    var localizedDescription: String {
-        switch self {
-        case .thumbnailGenerationFailed:
-            return "Failed to generate thumbnail"
-        case .videoDataReadFailed:
-            return "Failed to read video data"
-        case .uploadFailed(let message):
-            return "Upload failed: \(message)"
-        }
-    }
-}
-
 actor VideoUploadService {
     static let shared = VideoUploadService()
     private let storage = Storage.storage().reference()

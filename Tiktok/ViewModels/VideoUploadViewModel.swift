@@ -5,6 +5,10 @@ import AVFoundation
 
 @MainActor
 final class VideoUploadViewModel: ObservableObject {
+    // Constants
+    static let MAX_VIDEO_DURATION: TimeInterval = 30 * 60 // 30 minutes in seconds
+    static let MAX_FILE_SIZE: Int64 = 200 * 1024 * 1024 // 200MB in bytes
+    
     @Published private(set) var isUploading = false
     @Published private(set) var uploadProgress: Double = 0
     @Published private(set) var errorMessage: String?
@@ -77,7 +81,7 @@ final class VideoUploadViewModel: ObservableObject {
             print("DEBUG: Attempting to load video from PhotosPickerItem")
             if let videoURL = try await item.loadTransferable(type: URL.self) {
                 print("DEBUG: Successfully loaded video URL: \(videoURL)")
-                return videoURL
+                return try await validateVideo(at: videoURL)
             } else {
                 print("DEBUG: loadTransferable returned nil")
                 
@@ -88,15 +92,47 @@ final class VideoUploadViewModel: ObservableObject {
                     let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
                     try videoData.write(to: tempURL)
                     print("DEBUG: Created temporary file at: \(tempURL)")
-                    return tempURL
+                    return try await validateVideo(at: tempURL)
                 }
                 
                 print("DEBUG: Both URL and Data loading attempts failed")
-                throw NSError(domain: "VideoUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not load video as URL or Data"])
+                throw VideoUploadError.pickerLoadFailed
             }
         } catch {
             print("DEBUG: Error loading video: \(error.localizedDescription)")
             throw error
         }
+    }
+    
+    private func validateVideo(at url: URL) async throws -> URL {
+        print("DEBUG: Validating video at \(url)")
+        
+        // Check format
+        guard url.pathExtension.lowercased() == "mp4" else {
+            print("DEBUG: Invalid format")
+            throw VideoUploadError.invalidFormat
+        }
+        
+        // Check duration
+        let asset = AVURLAsset(url: url)
+        let duration = try await asset.load(.duration)
+        let durationInSeconds = duration.seconds
+        
+        guard durationInSeconds <= Self.MAX_VIDEO_DURATION else {
+            print("DEBUG: Duration exceeds limit")
+            throw VideoUploadError.videoDurationExceeded(durationInSeconds)
+        }
+        
+        // Check file size
+        let resources = try url.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = resources.fileSize ?? 0
+        
+        guard Int64(fileSize) <= Self.MAX_FILE_SIZE else {
+            print("DEBUG: File size exceeds limit")
+            throw VideoUploadError.fileSizeExceeded(Int64(fileSize))
+        }
+        
+        print("DEBUG: Video validation successful")
+        return url
     }
 } 

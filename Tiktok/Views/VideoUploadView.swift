@@ -26,19 +26,17 @@ struct VideoUploadView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
                 
-                // Video Selection Area
-                let hasVideo = viewModel.hasSelectedVideo
-                
+                // Video Picker
                 PhotosPicker(
                     selection: $viewModel.selectedVideo,
                     matching: .videos,
                     photoLibrary: .shared()
                 ) {
                     ZStack {
-                        if hasVideo {
+                        if viewModel.hasSelectedVideo {
                             if let previewPlayer = previewPlayer {
                                 VideoPlayer(player: previewPlayer)
-                                    .frame(width: 200, height: 355)  // 9:16 aspect ratio
+                                    .frame(width: 200, height: 300)
                                     .cornerRadius(15)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 15)
@@ -47,7 +45,7 @@ struct VideoUploadView: View {
                             } else {
                                 Rectangle()
                                     .fill(Color.blue.opacity(0.1))
-                                    .frame(width: 200, height: 355)
+                                    .frame(width: 200, height: 300)
                                     .cornerRadius(15)
                                     .overlay(
                                         ProgressView()
@@ -67,17 +65,41 @@ struct VideoUploadView: View {
                                 Text("Tap to Select Video")
                                     .font(.headline)
                                 
-                                Text("MP4 format • Max 10 minutes")
+                                Text("MP4 format • Max 30 minutes • Max 200MB")
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
-                            .frame(width: 200, height: 355)
+                            .frame(width: 200, height: 300)
                             .background(Color(.systemGray6))
                             .cornerRadius(15)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity)
+                
+                // Error Message
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.red.opacity(0.1))
+                        )
+                        .padding(.horizontal, 24)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .onAppear {
+                            Task {
+                                try? await Task.sleep(for: .seconds(4))
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    viewModel.clearError()
+                                }
+                            }
+                        }
+                }
                 
                 // Caption Section
                 VStack(alignment: .leading, spacing: 8) {
@@ -114,23 +136,6 @@ struct VideoUploadView: View {
                     }
                     .font(.subheadline)
                     .foregroundColor(.blue)
-                }
-                
-                // Error Message
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                        .onAppear {
-                            Task {
-                                try? await Task.sleep(for: .seconds(5))
-                                await MainActor.run {
-                                    viewModel.clearError()
-                                }
-                            }
-                        }
                 }
                 
                 // Upload Progress
@@ -234,7 +239,7 @@ struct GuidelinesView: View {
         NavigationView {
             List {
                 Section {
-                    GuidelineRow(icon: "video", title: "Video Requirements", description: "MP4 format only, up to 10 minutes long")
+                    GuidelineRow(icon: "video", title: "Video Requirements", description: "MP4 format, max 30 minutes long, max 200MB file size")
                     GuidelineRow(icon: "rectangle.and.text.magnifyingglass", title: "Content Quality", description: "Clear, well-lit videos with good audio quality")
                     GuidelineRow(icon: "exclamationmark.triangle", title: "Content Guidelines", description: "No explicit, harmful, or copyrighted content")
                     GuidelineRow(icon: "person.2", title: "Community Standards", description: "Share informative, educational content that adds value")
