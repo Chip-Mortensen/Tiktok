@@ -8,6 +8,7 @@ struct VideoUploadView: View {
     @Environment(\.tabSelection) private var tabSelection
     @State private var showingGuidelines = false
     @State private var previewPlayer: AVPlayer?
+    @State private var hasVideo = false
     
     var body: some View {
         ScrollView {
@@ -33,7 +34,7 @@ struct VideoUploadView: View {
                     photoLibrary: .shared()
                 ) {
                     ZStack {
-                        if viewModel.hasSelectedVideo {
+                        if hasVideo {
                             if let previewPlayer = previewPlayer {
                                 VideoPlayer(player: previewPlayer)
                                     .frame(width: 200, height: 300)
@@ -179,11 +180,11 @@ struct VideoUploadView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(viewModel.hasSelectedVideo ? Color.blue : Color.gray)
+                    .background(hasVideo ? Color.blue : Color.gray)
                     .foregroundColor(.white)
                     .cornerRadius(15)
                 }
-                .disabled(!viewModel.hasSelectedVideo || viewModel.isUploading)
+                .disabled(!hasVideo || viewModel.isUploading)
                 .padding(.horizontal, 24)
                 
                 Spacer()
@@ -194,6 +195,9 @@ struct VideoUploadView: View {
         }
         .onChange(of: viewModel.selectedVideo) { _, _ in
             setupPreviewPlayer()
+            Task { @MainActor in
+                hasVideo = viewModel.hasSelectedVideo
+            }
         }
     }
     
